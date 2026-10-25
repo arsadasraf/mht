@@ -2,10 +2,10 @@
 # Machine House (MH) ERP — Master Docker Compose Specification
 # Machine House - Winding Technologies ("House of Innovations.....")
 #
-# Services:
-#   1. mongodb   - Database with persistent volume & mongosh healthcheck
-#   2. backend   - Node.js Alpine Express API Server (Configured via backend/.env)
-#   3. frontend  - Next.js Standalone Runner (Configured via frontend/.env.prod)
+# Services (Image-only Pull & Run Architecture):
+#   1. mongodb   - Database image with persistent volume & mongosh healthcheck
+#   2. backend   - Node.js Alpine Express API Server (fetches pre-built image)
+#   3. frontend  - Next.js Standalone Runner (fetches pre-built image)
 #
 # Network:
 #   mht-network  - Isolated internal bridge network for inter-service communication
@@ -33,12 +33,10 @@ services:
       start_period: 10s
 
   # ----------------------------------------------------------------------------
-  # 2. Machine House ERP Backend API (Node.js Alpine)
+  # 2. Machine House ERP Backend API (Fetches Image, Zero Local Build)
   # ----------------------------------------------------------------------------
   backend:
-    build:
-      context: ./backend
-      dockerfile: Dockerfile
+    image: arsadasraf/mht-backend:latest
     container_name: mht-backend
     restart: unless-stopped
     ports:
@@ -54,12 +52,10 @@ services:
       - mht-network
 
   # ----------------------------------------------------------------------------
-  # 3. Machine House ERP Frontend (Next.js Multi-Stage Standalone)
+  # 3. Machine House ERP Frontend (Fetches Image, Zero Local Build)
   # ----------------------------------------------------------------------------
   frontend:
-    build:
-      context: ./frontend
-      dockerfile: Dockerfile
+    image: arsadasraf/mht-frontend:latest
     container_name: mht-frontend
     restart: unless-stopped
     ports:
