@@ -139,17 +139,17 @@ export default function LoginPage() {
     }
   };
 
-  // Mount Google Identity Services (GSI)
+  // Mount Google Identity Services (GSI) with dynamic runtime Client ID resolution
   useEffect(() => {
-    const googleClientId =
+    let activeClientId =
       process.env.NEXT_PUBLIC_GOOGLE_CLIENT_ID ||
       '784057626241-eish7vufabh0d4ttmi910enchmbo8rk5.apps.googleusercontent.com';
 
-    const renderGoogleButton = () => {
-      if (window.google?.accounts?.id) {
+    const renderGoogleButton = (clientId: string) => {
+      if (window.google?.accounts?.id && clientId) {
         try {
           window.google.accounts.id.initialize({
-            client_id: googleClientId,
+            client_id: clientId,
             callback: handleGoogleCredentialResponse,
             auto_select: false
           });
@@ -174,20 +174,41 @@ export default function LoginPage() {
       }
     };
 
-    if (window.google?.accounts?.id) {
-      renderGoogleButton();
-    } else {
-      const script = document.createElement('script');
-      script.src = 'https://accounts.google.com/gsi/client';
-      script.async = true;
-      script.defer = true;
-      script.onload = renderGoogleButton;
-      document.body.appendChild(script);
-    }
+    const initGsi = (clientId: string) => {
+      if (window.google?.accounts?.id) {
+        renderGoogleButton(clientId);
+      } else {
+        const existingScript = document.getElementById('google-gsi-script');
+        if (!existingScript) {
+          const script = document.createElement('script');
+          script.id = 'google-gsi-script';
+          script.src = 'https://accounts.google.com/gsi/client';
+          script.async = true;
+          script.defer = true;
+          script.onload = () => renderGoogleButton(clientId);
+          document.body.appendChild(script);
+        } else {
+          existingScript.onload = () => renderGoogleButton(clientId);
+        }
+      }
+    };
+
+    // Fetch runtime Google Client ID from backend so any .env changes take effect instantly
+    fetch('/api/v1/admin/auth/config')
+      .then((res) => res.json())
+      .then((data) => {
+        if (data?.googleClientId) {
+          activeClientId = data.googleClientId;
+        }
+        initGsi(activeClientId);
+      })
+      .catch(() => {
+        initGsi(activeClientId);
+      });
 
     const handleResize = () => {
       if (window.google?.accounts?.id) {
-        renderGoogleButton();
+        renderGoogleButton(activeClientId);
       }
     };
     window.addEventListener('resize', handleResize);

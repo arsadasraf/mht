@@ -22,11 +22,11 @@ services:
     ports:
       - "27017:27017"
     volumes:
-      - mongodb_data:/data/db
+      - /mnt/mongodb-data:/data/db
     networks:
       - mht-network
     healthcheck:
-      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -36,13 +36,13 @@ services:
   # 2. Machine House ERP Backend API (Fetches Image, Zero Local Build)
   # ----------------------------------------------------------------------------
   backend:
-    image: arsadasraf/mht-backend:latest
+    image: minsarsad/mht-backend:v1
     container_name: mht-backend
     restart: unless-stopped
     ports:
       - "5000:5000"
     env_file:
-      - ./backend/.env
+      - .env
     volumes:
       - backend_uploads:/app/uploads
     depends_on:
@@ -55,13 +55,13 @@ services:
   # 3. Machine House ERP Frontend (Fetches Image, Zero Local Build)
   # ----------------------------------------------------------------------------
   frontend:
-    image: arsadasraf/mht-frontend:latest
+    image: minsarsad/mht-frontend:v1
     container_name: mht-frontend
     restart: unless-stopped
     ports:
       - "3000:3000"
     env_file:
-      - ./frontend/.env.prod
+      - .env.prod
     depends_on:
       - backend
     networks:
@@ -79,7 +79,6 @@ networks:
 # Persistent Storage Volumes
 # ------------------------------------------------------------------------------
 volumes:
-  mongodb_data:
-    name: mht_mongodb_data
+
   backend_uploads:
     name: mht_backend_uploads

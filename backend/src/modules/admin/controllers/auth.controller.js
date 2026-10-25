@@ -415,3 +415,11 @@ export const getMe = async (req, res) => {
     }
   });
 };
+
+export const getAuthConfig = async (req, res) => {
+  res.status(200).json({
+    success: true,
+    googleClientId: process.env.GOOGLE_CLIENT_ID || '784057626241-eish7vufabh0d4ttmi910enchmbo8rk5.apps.googleusercontent.com'
+  });
+};
+
