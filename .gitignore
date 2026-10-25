@@ -1,0 +1,116 @@
+# ==============================================================================
+# Machine House (MH) ERP — Master .gitignore
+# Machine House - Winding Technologies ("House of Innovations.....")
+# ==============================================================================
+
+# 1. Sensitive Files, Environment Configurations & Credentials (MANDATORY)
+.env
+.env.*
+*.env
+!.env.example
+!.env.template
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+# SSL Certificates, Private Keys & Secret Tokens
+*.pem
+*.key
+*.cert
+*.crt
+*.pfx
+*.p12
+*.keystore
+id_rsa
+id_ecdsa
+id_ed25519
+jwt_secret*
+
+# AWS & Cloud Credentials
+.aws/
+credentials
+credentials.json
+client_secret*.json
+
+# 2. Dependency Directories
+node_modules/
+*/node_modules/
+.pnp
+.pnp.js
+
+# 3. Build & Compilation Outputs
+.next/
+*/.next/
+out/
+*/out/
+dist/
+*/dist/
+build/
+*/build/
+*.tsbuildinfo
+*/tsconfig.tsbuildinfo
+
+# 4. Logs, Debugging & Diagnostic Files
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+.pnpm-debug.log*
+
+# 5. Local File Uploads, Media Storage & Scratch Artifacts
+uploads/*
+!uploads/.gitkeep
+backend/uploads/*
+!backend/uploads/.gitkeep
+temp/
+tmp/
+.tempmediaStorage/
+.system_generated/
+
+# 6. Database Storage & Docker Persistence Volumes
+data/
+mongo_data/
+mongo-data/
+docker-volumes/
+*.sqlite
+*.sqlite3
+*.db
+
+# 7. Caching Systems & Framework Caches
+.cache/
+.turbo/
+.parcel-cache/
+.eslintcache
+
+# 8. Operating System Specific Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+[Dd]esktop.ini
+
+# 9. IDE & Code Editor Configurations
+.idea/
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+*.sublime-workspace
+*.sublime-project
+*.swp
+*.swo
+*.sln
+*.suo
+*.ntvs*
+*.njsproj
+
+# 10. Test Coverage & Reports
+coverage/
+.nyc_output/
+*.lcov

@@ -1,0 +1,89 @@
+# ==============================================================================
+# Machine House (MH) ERP — Master Docker Compose Specification
+# Machine House - Winding Technologies ("House of Innovations.....")
+#
+# Services:
+#   1. mongodb   - Database with persistent volume & mongosh healthcheck
+#   2. backend   - Node.js Alpine Express API Server (Configured via backend/.env)
+#   3. frontend  - Next.js Standalone Runner (Configured via frontend/.env.prod)
+#
+# Network:
+#   mht-network  - Isolated internal bridge network for inter-service communication
+# ==============================================================================
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. MongoDB Database
+  # ----------------------------------------------------------------------------
+  mongodb:
+    image: mongo:latest
+    container_name: mht-mongodb
+    restart: unless-stopped
+    ports:
+      - "27017:27017"
+    volumes:
+      - mongodb_data:/data/db
+    networks:
+      - mht-network
+    healthcheck:
+      test: ["CMD", "mongosh", "--eval", "db.adminCommand('ping')"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+
+  # ----------------------------------------------------------------------------
+  # 2. Machine House ERP Backend API (Node.js Alpine)
+  # ----------------------------------------------------------------------------
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: mht-backend
+    restart: unless-stopped
+    ports:
+      - "5000:5000"
+    env_file:
+      - ./backend/.env
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    networks:
+      - mht-network
+
+  # ----------------------------------------------------------------------------
+  # 3. Machine House ERP Frontend (Next.js Multi-Stage Standalone)
+  # ----------------------------------------------------------------------------
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: mht-frontend
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    env_file:
+      - ./frontend/.env.prod
+    depends_on:
+      - backend
+    networks:
+      - mht-network
+
+# ------------------------------------------------------------------------------
+# Isolated Bridge Network
+# ------------------------------------------------------------------------------
+networks:
+  mht-network:
+    name: mht-network
+    driver: bridge
+
+# ------------------------------------------------------------------------------
+# Persistent Storage Volumes
+# ------------------------------------------------------------------------------
+volumes:
+  mongodb_data:
+    name: mht_mongodb_data
+  backend_uploads:
+    name: mht_backend_uploads

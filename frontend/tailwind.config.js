@@ -1,0 +1,87 @@
+/** @type {import('tailwindcss').Config} */
+module.exports = {
+  content: [
+    './src/pages/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/components/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/app/**/*.{js,ts,jsx,tsx,mdx}',
+    './src/modules/**/*.{js,ts,jsx,tsx,mdx}',
+  ],
+  theme: {
+    extend: {
+      colors: {
+        brand: {
+          50: '#FFF7ED',
+          100: '#FFEDD5',
+          200: '#FED7AA',
+          300: '#FDBA74',
+          400: '#FB923C',
+          500: '#FF6A00', // Machine House Primary Safety Orange
+          600: '#E65F00',
+          700: '#C2410C',
+          800: '#9A3412',
+          900: '#7C2D12',
+          DEFAULT: '#FF6A00',
+          hover: '#E65F00',
+          light: '#FFF7ED',
+          border: '#FED7AA',
+        },
+        canvas: {
+          DEFAULT: '#F8FAFC',
+          subtle: '#F1F5F9',
+        },
+        surface: {
+          DEFAULT: '#FFFFFF',
+          card: '#FFFFFF',
+          muted: '#F8FAFC',
+          border: '#E2E8F0',
+          hover: '#F1F5F9',
+        },
+        slate: {
+          950: '#020617',
+          900: '#0F172A',
+          800: '#1E293B',
+          700: '#334155',
+          600: '#475569',
+          500: '#64748B',
+          400: '#94A3B8',
+          300: '#CBD5E1',
+          200: '#E2E8F0',
+          100: '#F1F5F9',
+          50: '#F8FAFC',
+        },
+        status: {
+          pass: '#059669',
+          passBg: '#ECFDF5',
+          passBorder: '#A7F3D0',
+          warning: '#D97706',
+          warningBg: '#FFFBEB',
+          warningBorder: '#FDE68A',
+          danger: '#DC2626',
+          dangerBg: '#FEF2F2',
+          dangerBorder: '#FECACA',
+          info: '#0284C7',
+          infoBg: '#F0F9FF',
+          infoBorder: '#BAE6FD',
+        },
+      },
+      fontFamily: {
+        sans: ['Inter', 'system-ui', 'sans-serif'],
+        display: ['Outfit', 'Inter', 'sans-serif'],
+        mono: ['ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
+      },
+      boxShadow: {
+        '2xs': '0 1px 1px 0 rgba(0, 0, 0, 0.03)',
+        'xs': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        'clean-sm': '0 1px 2px 0 rgba(0, 0, 0, 0.05)',
+        'clean': '0 1px 3px 0 rgba(0, 0, 0, 0.07), 0 1px 2px -1px rgba(0, 0, 0, 0.07)',
+        'clean-md': '0 4px 6px -1px rgba(0, 0, 0, 0.07), 0 2px 4px -2px rgba(0, 0, 0, 0.05)',
+        'clean-lg': '0 10px 15px -3px rgba(0, 0, 0, 0.08), 0 4px 6px -4px rgba(0, 0, 0, 0.04)',
+        'brand': '0 4px 14px 0 rgba(255, 106, 0, 0.25)',
+      },
+      backdropBlur: {
+        xs: '2px',
+      },
+    },
+  },
+  plugins: [],
+};
