@@ -21,6 +21,7 @@ import storeRoutes from './modules/store/routes/index.js';
 import productionTrialRoutes from './modules/production-trial/routes/index.js';
 import dispatchRoutes from './modules/dispatch/routes/index.js';
 import afterSalesRoutes from './modules/after-sales/routes/index.js';
+import masterRoutes from './modules/masters/routes/index.js';
 import s3Routes from './routes/s3.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -78,11 +79,14 @@ app.use('/api/v1/crm', crmRoutes);
 app.use('/api/v1/project-setup', projectSetupRoutes);
 app.use('/api/v1/design', designRoutes);
 app.use('/api/v1/purchase', purchaseRoutes);
+app.use('/api/v1/quality', incomingQualityRoutes);
 app.use('/api/v1/incoming-quality', incomingQualityRoutes);
 app.use('/api/v1/store', storeRoutes);
 app.use('/api/v1/production-trial', productionTrialRoutes);
 app.use('/api/v1/dispatch', dispatchRoutes);
 app.use('/api/v1/after-sales', afterSalesRoutes);
+app.use('/api/v1/masters', masterRoutes);
+app.use('/api/masters', masterRoutes);
 app.use('/api/v1/s3', s3Routes);
 
 // Global Error Handling Middleware

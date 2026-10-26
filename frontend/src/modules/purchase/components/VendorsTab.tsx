@@ -1,7 +1,7 @@
 'use client';
 
 import React from 'react';
-import { Building2, Star, Mail, Phone } from 'lucide-react';
+import { Star, Mail, Phone } from 'lucide-react';
 import { useGetVendorsQuery } from '../api/purchaseApi';
 
 export default function VendorsTab() {
@@ -10,25 +10,25 @@ export default function VendorsTab() {
 
   return (
     <div className="space-y-4">
-      {/* Header bar */}
+      {/* Header count chip */}
       <div className="flex items-center justify-between">
         <span className="text-xs font-semibold px-2.5 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200">
-          {vendors.length} Approved Suppliers
+          {vendors.length}
         </span>
       </div>
 
       {/* Vendors Grid */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3.5">
         {isLoading ? (
-          <div className="col-span-full bg-white rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-500">
-            Loading Approved Suppliers Directory...
+          <div className="col-span-full bg-white rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-400">
+            Loading...
           </div>
         ) : vendors.length === 0 ? (
-          <div className="col-span-full bg-white rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-500">
-            No vendors registered in database.
+          <div className="col-span-full bg-white rounded-xl border border-slate-200 p-8 text-center text-xs text-slate-400">
+            No vendors found.
           </div>
         ) : (
-          vendors.map((v) => (
+          vendors.map((v: any) => (
             <div
               key={v._id}
               className="bg-white rounded-xl border border-slate-200 p-4 shadow-sm hover:border-slate-300 transition-all flex flex-col justify-between space-y-3"
@@ -46,24 +46,28 @@ export default function VendorsTab() {
 
                 <h3 className="text-xs font-bold text-slate-900 mb-1">{v.name}</h3>
                 <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-semibold bg-sky-50 text-sky-700 border border-sky-200">
-                  {v.category.replace(/_/g, ' ')}
+                  {v.category?.replace(/_/g, ' ')}
                 </span>
 
                 <div className="space-y-1 mt-3 text-xs text-slate-600">
-                  <div className="flex items-center gap-1.5">
-                    <Mail size={12} className="text-slate-400" />
-                    <span className="truncate">{v.email}</span>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <Phone size={12} className="text-slate-400" />
-                    <span>{v.phone}</span>
-                  </div>
+                  {v.email && (
+                    <div className="flex items-center gap-1.5">
+                      <Mail size={12} className="text-slate-400" />
+                      <span className="truncate">{v.email}</span>
+                    </div>
+                  )}
+                  {v.phone && (
+                    <div className="flex items-center gap-1.5">
+                      <Phone size={12} className="text-slate-400" />
+                      <span>{v.phone}</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
               <div className="pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] text-slate-500">
                 <span>GST: <strong className="font-mono text-slate-700">{v.gstin || '—'}</strong></span>
-                <span>Terms: <strong className="text-slate-700">{v.paymentTermsDays}d</strong></span>
+                <span>Terms: <strong className="text-slate-700">{v.paymentTermsDays || 30}d</strong></span>
               </div>
             </div>
           ))

@@ -1,18 +1,19 @@
 import { Router } from 'express';
 import {
   getProjects,
+  getAvailableCustomerPos,
   getProjectById,
   createProject,
   updateProjectStage
 } from '../controllers/project.controller.js';
 import { authenticate } from '../../../middleware/auth.middleware.js';
-import { authorizeRouteAccess } from '../../../middleware/rbac.middleware.js';
 
 const router = Router();
 
-router.use(authenticate, authorizeRouteAccess('/project-setup/projects'));
+router.use(authenticate);
 
 router.get('/', getProjects);
+router.get('/available-customer-pos', getAvailableCustomerPos);
 router.get('/:id', getProjectById);
 router.post('/', createProject);
 router.patch('/:id/stage', updateProjectStage);

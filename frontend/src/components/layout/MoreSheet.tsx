@@ -29,6 +29,8 @@ import {
   LifeBuoy,
   PieChart,
   Settings,
+  Boxes,
+  Database,
   LucideIcon
 } from 'lucide-react';
 import { getModuleBySlug } from '../../config/modules.config';
@@ -60,7 +62,9 @@ const TAB_ICON_MAP: Record<string, LucideIcon> = {
   CheckCircle2,
   LifeBuoy,
   PieChart,
-  Settings
+  Settings,
+  Boxes,
+  Database
 };
 
 interface MoreSheetProps {

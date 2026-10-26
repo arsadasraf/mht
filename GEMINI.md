@@ -21,6 +21,14 @@
 > * **Light-Surface Close Button:** Subtle light hover close button (`text-slate-400 hover:text-slate-800 hover:bg-slate-100 p-1.5 rounded-xl transition-colors`).
 > * **Zero Dark Mode Headers:** Strictly NO dark/black headers (`bg-slate-900` or `bg-black` are strictly prohibited) across all modals, drawers, and form cards in the application.
 > 
+> **Strictly Zero Default Text-Based Information & Zero Dummy Data Everywhere:**
+> Across the entire application, eliminate all default narrative explanatory prose, filler sub-headings, and subtitles under titles:
+> * **Zero Header Subtitles:** Page and modal headers contain ONLY the title and icon. Strictly NO explanatory subtext (e.g. no *"Creates the unique PRJ-XXXX / WO-XXXX master lifecycle reference spine"*).
+> * **Clean Industrial KPI Chips:** KPI cards display ONLY the metric label and numeric value. Strictly NO tertiary commentary or filler sub-captions (e.g. no *"Lifecycle Tracking Active"*, no *"Kickoff to Zero-Snag Dispatch"*).
+> * **Concise Inputs & Placeholders:** Input labels must be short and direct. Placeholders must be minimal (e.g. `placeholder="Project name"` or `placeholder="Search..."`), NEVER lengthy sentence instructions.
+> * **Strictly ZERO Hardcoded Dummy Data:** Strictly NO fallback fake IDs (e.g. `'PRJ-2026-001'`) or static dummy cards. If an API returns no data, show a clean, minimal empty state. Real data is sourced exclusively from the database/API.
+> * **Project Setup Naming:** The module name is strictly **"Project Setup"** (NOT *"Project Setup Spine"*).
+> 
 > **Unified Informal & Human-Friendly Messaging, Alerts & Confirmations:**
 > All messages, validation errors, toasts, and confirmation dialogs MUST speak in a single, friendly, conversational, and direct human tone:
 > * **Single Informal Voice:** Strictly NO robotic error codes or stiff legalese. Always use warm, direct, conversational English (*"All set! Changes saved."*, *"We couldn't save this right now. Please check the required fields and try again."*, *"Delete this? Once removed, you won't be able to recover this record."*).
@@ -42,3 +50,9 @@
 > 
 > **OWASP Top 10 Reference Standard:**
 > *"The OWASP Top 10 is the reference standard for the most critical web application security risks. Adopting the OWASP Top 10 is perhaps the most effective first step towards changing your software development culture focused on producing secure code."*
+> 
+> **Strict Agent Operating Constraints & Workflow Rules:**
+> * **Mandatory Pre-Execution Planning:** The AI agent must ALWAYS create, present, and align on a clear, structured implementation plan BEFORE modifying code or executing feature implementations.
+> * **Strictly Zero Git Commits by Agent:** Under NO circumstances should any AI agent run `git commit`, stage-and-commit scripts, or create automated git commits. All git commits and repository pushes are reserved exclusively for the human developer.
+> * **Strictly Zero Agent Browser Access:** Under NO circumstances should any AI agent invoke browser subagents or automated browser interaction tools (`browser_subagent`). Visual inspections and web browsing by the agent are disabled; verification must be conducted via direct code inspection, terminal CLI tests, or by asking the user for review.
+

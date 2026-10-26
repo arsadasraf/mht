@@ -1,8 +1,5 @@
-'use client';
-
-import React from 'react';
-import GateEntryTab from '../../../../modules/incoming-quality/components/GateEntryTab';
+import { redirect } from 'next/navigation';
 
 export default function GateEntryPage() {
-  return <GateEntryTab />;
+  redirect('/quality/incoming-inspection');
 }

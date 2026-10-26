@@ -127,11 +127,6 @@ export default function MobileModuleDrawer() {
                 </div>
 
                 <div className="flex items-center gap-1.5 flex-shrink-0">
-                  {mod.isSpine && (
-                    <span className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700">
-                      Spine
-                    </span>
-                  )}
                   <ChevronRight size={15} className="text-slate-400" />
                 </div>
               </Link>

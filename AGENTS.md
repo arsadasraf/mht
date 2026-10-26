@@ -82,9 +82,8 @@ The entire user interface and user experience across the Landing Page (`/`), ERP
      * Structured under `frontend/src/modules/<module-slug>/` with dedicated `components/`, `api/` (RTK Query), and `hooks/` sub-folders.
      * Route pages map 1-to-1 in `src/app/(dashboard)/<module-slug>/<tab-slug>/page.jsx`.
      * Each tab has its own separate UI component and separate RTK Query endpoint file, preventing UI file bloat and maximizing human readability.
-   * **Zero Narrative Text Blocks:** Strictly avoid verbose explanatory paragraphs and introductory text banners in UI tabs. Rely exclusively on compact KPI chips, clear breadcrumbs, and direct data tables.
-   * **Meaningful Forms & Actionable Error Messages:** Form fields include inline helper guidance; validations and API errors must provide clear, human-readable, and actionable fix instructions (surfaced via in-app toast notifications), never raw dumps or generic alerts.
-   * **Desktop Sidebar Navigation (Un-numbered Lifecycle Order):** Modules follow the exact operational lifecycle sequence (Project Setup Spine, CRM, Design, Purchase, Quality, Store, Production & Trial, Dispatch, After Sales, Admin), strictly without serial numbers (`1.`, `2.`, etc.).
+   * **Strictly Zero Default Text-Based Information & Zero Dummy Data Everywhere:** All pages, tabs, modals, dialogs, cards, and forms must eliminate unnecessary explanatory prose, filler descriptions, and subtitles under headers. Page/modal headers contain ONLY the title and icon. KPI chips display ONLY the label and value (strictly zero filler commentary or subtext). Form inputs use concise labels and minimal placeholders. Strictly ZERO hardcoded dummy data (no fallback IDs like `'PRJ-2026-001'`). All data is loaded strictly from the API.
+   * **Desktop Sidebar Navigation (Un-numbered Lifecycle Order):** Modules follow the exact operational lifecycle sequence (Project Setup, CRM, Design, Purchase, Quality, Store, Production & Trial, Dispatch, After Sales, Admin), strictly without serial numbers (`1.`, `2.`, etc.).
    * **Mobile & Tablet Native UI (Sticky Bottom Tab Bar):** On mobile phones and portrait tablets, desktop horizontal tabs transform into a **sticky bottom icon navigation bar** (4 tabs + 'More (⋯)' slide-up sheet); top hamburger drawer switches between the 10 overarching modules; forms use slide-up bottom sheets; wide tables transform into touch cards.
 2. **Backend Architecture & Modular Sub-Folder Structure:**
    * **Runtime & Framework:** Node.js + Express.js.
@@ -120,7 +119,7 @@ All 10 modules reside in the primary sidebar navigation. Each module contains mu
 
 1. **Module 1: Admin (`/admin`)**
    * Central control center for user management, role assignments, route/tab permissions matrix, plant IP whitelists, system audit logs, and global masters.
-2. **Module 2: CRM (`/crm`)**
+2. **Module 2: CRM & Enquiry (`/crm`)**
    * Customer enquiry management, lead sheets, standardized bulk Excel import with dry-run validation preview, quotations, and 1-click transition to confirmed project.
 3. **Module 3: Project Setup (`/project-setup`) [Central Spine]**
    * **Core Rule:** Creates the **Unique Project ID / Master Work Order ID** (`PRJ-XXXX` / `WO-XXXX`).
@@ -133,10 +132,11 @@ All 10 modules reside in the primary sidebar navigation. Each module contains mu
 5. **Module 5: Purchase (`/purchase`)**
    * BOM-driven net purchase demand calculation (Gross BOM Demand minus Available Unreserved Inventory).
    * Multi-level PO approval hierarchy, vendor follow-up tracking, and overdue delivery alerts.
-6. **Module 6: Incoming Quality (`/incoming-quality`)**
-   * Inward gate entry with quarantine status holding until QC clearance.
-   * Goods Receipt QC logging (Accepted, Rejected, Rework).
-   * Vendor Return to Vendor (RTV) tracking and Defect Root-Cause analytics.
+6. **Module 6: Quality (`/quality`)**
+   * Incoming Inspection (Inward quarantine gate entry holding, Goods Receipt QC inspections, Accepted/Rejected/Rework tracking).
+   * Process Inspection (In-process assembly stage inspections, tolerance checks, in-line snag clearance).
+   * PDI (Pre-Delivery Inspection, zero-snag verification, and final trial inspection sign-off).
+   * Quality Master (Standard inspection checklists, defect codes, tolerance standards, and instrument calibration).
 7. **Module 7: Store (`/store`)**
    * 4-Bucket inventory states: `Ordered`, `In-QC`, `Accepted`, `Issued`.
    * **Strict Hard Allocation Locking:** QC-accepted materials are hard-locked to the target Unique Project ID; unauthorized diversion to other machines is strictly blocked without Managerial Transfer Approval.
@@ -154,8 +154,16 @@ All 10 modules reside in the primary sidebar navigation. Each module contains mu
 
 ---
 
-## 4. Code & Implementation Standards
+## 4. Strict Agent Operating Constraints & Workflow Rules
+* **Mandatory Pre-Execution Planning:** The AI agent must ALWAYS create, present, and align on a clear, structured implementation plan BEFORE modifying code or executing feature implementations.
+* **Strictly Zero Git Commits by Agent:** Under NO circumstances should any AI agent run `git commit`, stage-and-commit scripts, or create automated git commits. All git commits and repository pushes are reserved exclusively for the human developer.
+* **Strictly Zero Agent Browser Access:** Under NO circumstances should any AI agent invoke browser subagents or automated browser interaction tools (`browser_subagent`). Visual inspections and web browsing by the agent are disabled; verification must be conducted via direct code inspection, terminal CLI tests, or by asking the user for review.
+
+---
+
+## 5. Code & Implementation Standards
 * No placeholder text or broken mock states.
 * Clickable file links must always use GitHub markdown format: `[filename](file:///path/to/file)`.
 * Comprehensive error handling on both client and server with descriptive toast/banner notifications.
 * Complete industrial seed script provisioning realistic machine orders (*Automated Bottling Line* and *5-Axis CNC Gantry*) with active multi-level BOMs, CAD files, POs, and test accounts.
+

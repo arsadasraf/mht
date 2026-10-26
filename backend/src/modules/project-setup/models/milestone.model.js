@@ -1,5 +1,34 @@
 import mongoose from 'mongoose';
 
+const RemarkSchema = new mongoose.Schema(
+  {
+    text: {
+      type: String,
+      required: true,
+      trim: true
+    },
+    authorName: {
+      type: String,
+      default: 'System User',
+      trim: true
+    },
+    authorRole: {
+      type: String,
+      default: 'Engineer',
+      trim: true
+    },
+    authorId: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'User'
+    },
+    createdAt: {
+      type: Date,
+      default: Date.now
+    }
+  },
+  { _id: true }
+);
+
 const MilestoneSchema = new mongoose.Schema(
   {
     projectId: {
@@ -16,18 +45,25 @@ const MilestoneSchema = new mongoose.Schema(
     },
     stage: {
       type: String,
-      enum: [
-        'PROJECT_SETUP',
-        'DESIGN_BOM',
-        'PROCUREMENT',
-        'INCOMING_QC',
-        'STORE_ALLOCATION',
-        'PRODUCTION_ASSEMBLY',
-        'MACHINE_TRIAL',
-        'DISPATCH_READY',
-        'DISPATCHED'
-      ],
-      required: true
+      required: true,
+      trim: true
+    },
+    stageCode: {
+      type: String,
+      trim: true
+    },
+    order: {
+      type: Number,
+      default: 1
+    },
+    leadRole: {
+      type: String,
+      default: 'Project Manager',
+      trim: true
+    },
+    weightPercent: {
+      type: Number,
+      default: 10
     },
     baselineDate: {
       type: Date,
@@ -42,15 +78,17 @@ const MilestoneSchema = new mongoose.Schema(
     },
     status: {
       type: String,
-      enum: ['PENDING', 'IN_PROGRESS', 'COMPLETED', 'BLOCKED'],
-      default: 'PENDING'
+      enum: ['NOT_STARTED', 'PENDING', 'IN_PROGRESS', 'ON_HOLD', 'BLOCKED', 'COMPLETED'],
+      default: 'NOT_STARTED'
     },
+    remarks: [RemarkSchema],
     signOffBy: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     },
     signOffNotes: {
-      type: String
+      type: String,
+      trim: true
     },
     createdBy: {
       type: mongoose.Schema.Types.ObjectId,

@@ -9,6 +9,7 @@ import { Lead } from '../modules/crm/models/lead.model.js';
 import { Quotation } from '../modules/crm/models/quotation.model.js';
 import { Project } from '../modules/project-setup/models/project.model.js';
 import { Milestone } from '../modules/project-setup/models/milestone.model.js';
+import { StageMaster } from '../modules/project-setup/models/stageMaster.model.js';
 import { Bom } from '../modules/design/models/bom.model.js';
 import { Drawing } from '../modules/design/models/drawing.model.js';
 import { Eco } from '../modules/design/models/eco.model.js';
@@ -61,8 +62,26 @@ const seedDatabase = async () => {
       {
         name: 'Super Admin',
         slug: 'super-admin',
-        description: 'Complete unrestricted system access across all 10 modules & system governance',
+        description: 'Complete unrestricted system access across all modules & system governance',
         allowedRoutes: ['*']
+      },
+      {
+        name: 'Master Data Administrator',
+        slug: 'master-admin',
+        description: 'Manages enterprise master catalogues: items, vendors, customers, locations, categories, assemblies, company profile, and global settings',
+        allowedRoutes: [
+          '/masters/vendors',
+          '/masters/customers',
+          '/masters/locations',
+          '/masters/categories',
+          '/masters/rm-items',
+          '/masters/bo-items',
+          '/masters/components',
+          '/masters/subassemblies',
+          '/masters/assemblies',
+          '/masters/company-profile',
+          '/masters/settings'
+        ]
       },
       {
         name: 'Project Manager',
@@ -70,7 +89,9 @@ const seedDatabase = async () => {
         description: 'Oversees machine milestone schedules, BOM baselines, and dispatch gate passes',
         allowedRoutes: [
           '/project-setup/projects',
+          '/project-setup/kanban',
           '/project-setup/milestones',
+          '/project-setup/masters',
           '/crm/leads',
           '/crm/quotations',
           '/design/bom',
@@ -92,8 +113,19 @@ const seedDatabase = async () => {
       {
         name: 'Purchase Head',
         slug: 'purchase-head',
-        description: 'Reviews BOM net demand, issues vendor POs with dual currency, tracks delivery lead times',
-        allowedRoutes: ['/purchase/vendors', '/purchase/orders', '/store/inventory', '/project-setup/projects']
+        description: 'Reviews BOM net demand, manages RFQs and quotations, issues vendor POs and bills, tracks delivery lead times',
+        allowedRoutes: [
+          '/purchase/dashboard',
+          '/purchase/rfq',
+          '/purchase/quotations',
+          '/purchase/orders',
+          '/purchase/bills',
+          '/purchase/price-list',
+          '/purchase/masters',
+          '/purchase/vendors',
+          '/store/inventory',
+          '/project-setup/projects'
+        ]
       },
       {
         name: 'Quality Inspector',
@@ -163,10 +195,96 @@ const seedDatabase = async () => {
       status: 'ACTIVE'
     });
 
+    console.log('🌱 Seeding Standard Stage Master templates...');
+    const defaultStages = [
+      {
+        stageCode: 'PROJECT_SETUP',
+        stageName: 'Project Kickoff & Charter Sign-off',
+        defaultOrder: 1,
+        leadRole: 'Project Manager',
+        standardDaysOffset: 7,
+        weightPercent: 10,
+        description: 'Customer alignment, kick-off meeting, and project baseline setup.'
+      },
+      {
+        stageCode: 'DESIGN_BOM',
+        stageName: '3-Level Hierarchical BOM & CAD Freeze',
+        defaultOrder: 2,
+        leadRole: 'Lead Design Engineer',
+        standardDaysOffset: 14,
+        weightPercent: 15,
+        description: 'Complete 3D model release, structural analysis, and freeze of all 3 levels of BOM.'
+      },
+      {
+        stageCode: 'PROCUREMENT',
+        stageName: 'BOM Net Demand Sourced & POs Released',
+        defaultOrder: 3,
+        leadRole: 'Purchase Officer',
+        standardDaysOffset: 35,
+        weightPercent: 15,
+        description: 'All buy-out and raw material purchase orders committed with verified vendor lead times.'
+      },
+      {
+        stageCode: 'INCOMING_QC',
+        stageName: 'Critical Inward Gate Inspection & QC Pass',
+        defaultOrder: 4,
+        leadRole: 'Quality Engineer',
+        standardDaysOffset: 50,
+        weightPercent: 15,
+        description: 'Inspection of CNC machined parts, linear bearings, servo motors, and structural frames.'
+      },
+      {
+        stageCode: 'STORE_ALLOCATION',
+        stageName: 'Hard Stock Allocation Locked to Project',
+        defaultOrder: 5,
+        leadRole: 'Store Manager',
+        standardDaysOffset: 55,
+        weightPercent: 10,
+        description: 'Physical and ERP stock hard-locking against the project spine ID.'
+      },
+      {
+        stageCode: 'PRODUCTION_ASSEMBLY',
+        stageName: 'Mechanical & Electrical Assembly Sign-off',
+        defaultOrder: 6,
+        leadRole: 'Production Engineer',
+        standardDaysOffset: 75,
+        weightPercent: 15,
+        description: 'Base machine frame leveling, guide rails mounting, pneumatic plumbing, and control panel wiring.'
+      },
+      {
+        stageCode: 'MACHINE_TRIAL',
+        stageName: 'Internal Dry/Wet Run Trial Passed (Zero Snags)',
+        defaultOrder: 7,
+        leadRole: 'Commissioning Engineer',
+        standardDaysOffset: 85,
+        weightPercent: 10,
+        description: 'Continuous 8-hour machine dry run trial followed by material test winding at rated speed.'
+      },
+      {
+        stageCode: 'DISPATCH_READY',
+        stageName: 'Zero-Snag Block Verification & Dossier Sign-off',
+        defaultOrder: 8,
+        leadRole: 'Plant Head',
+        standardDaysOffset: 90,
+        weightPercent: 10,
+        description: 'Final packing list verification, dispatch gate pass generation, and client shipping notification.'
+      }
+    ];
+
+    await StageMaster.deleteMany({});
+    await StageMaster.insertMany(
+      defaultStages.map((s) => ({
+        ...s,
+        createdBy: superAdminUser._id,
+        updatedBy: superAdminUser._id
+      }))
+    );
+
     console.log('====================================================');
     console.log('🎉 Enterprise Environment Initialized Cleanly:');
     console.log(`👤 Super Admin Account: ${superAdminUser.email}`);
     console.log(`🔑 Super Admin Role:    ${superAdminRole.name} (Global Access)`);
+    console.log('🎯 Standard Stages:     8 Master Stage templates created.');
     console.log('🧹 Zero Dummy Records:  All dummy projects, BOMs, POs, and orders purged.');
     console.log('====================================================');
 

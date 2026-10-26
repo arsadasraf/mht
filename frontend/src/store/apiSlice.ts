@@ -87,7 +87,10 @@ export const apiSlice = createApi({
     'ServiceTicket',
     'AuditLog',
     'CrmMaster',
-    'Session'
+    'Session',
+    'MasterLookup',
+    'MasterDomain',
+    'StageMaster'
   ],
   endpoints: () => ({})
 });

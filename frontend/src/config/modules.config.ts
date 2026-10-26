@@ -19,11 +19,11 @@ export interface CoreModule {
 export const CORE_MODULES: CoreModule[] = [
   {
     id: 'crm',
-    name: 'CRM & Estimations',
+    name: 'CRM & Enquiry',
     slug: 'crm',
     path: '/crm/dashboard',
     icon: 'Briefcase',
-    description: 'Customer machine inquiries, dual-currency cost estimations, customer PO logging, and project conversions.',
+    description: '',
     tabs: [
       { id: 'dashboard', label: 'Dashboard', path: '/crm/dashboard', icon: 'PieChart' },
       { id: 'leads', label: 'Leads & Inquiry', path: '/crm/leads', icon: 'Inbox' },
@@ -33,15 +33,16 @@ export const CORE_MODULES: CoreModule[] = [
   },
   {
     id: 'project-setup',
-    name: 'Project Setup Spine',
+    name: 'Project Setup',
     slug: 'project-setup',
     path: '/project-setup/projects',
     icon: 'Cpu',
-    isSpine: true,
-    description: 'Mints the master Unique Project ID (PRJ-XXXX) and baseline milestones linking the full machine lifecycle.',
+    description: '',
     tabs: [
-      { id: 'projects', label: 'Active Machine Projects', path: '/project-setup/projects', icon: 'FolderGit2' },
-      { id: 'milestones', label: 'Milestone Baselines', path: '/project-setup/milestones', icon: 'CalendarCheck' }
+      { id: 'projects', label: 'Projects', path: '/project-setup/projects', icon: 'FolderGit2' },
+      { id: 'kanban', label: 'Kanban', path: '/project-setup/kanban', icon: 'Kanban' },
+      { id: 'milestones', label: 'Milestones', path: '/project-setup/milestones', icon: 'CalendarCheck' },
+      { id: 'masters', label: 'Masters', path: '/project-setup/masters', icon: 'Settings' }
     ]
   },
   {
@@ -50,7 +51,7 @@ export const CORE_MODULES: CoreModule[] = [
     slug: 'design',
     path: '/design/bom',
     icon: 'Compass',
-    description: '3-level hierarchical BOMs, watermarked CAD viewing, and automated ECO freezes.',
+    description: '',
     tabs: [
       { id: 'bom', label: '3-Level Hierarchical BOM', path: '/design/bom', icon: 'Layers' },
       { id: 'drawings', label: 'CAD Drawings & IP', path: '/design/drawings', icon: 'FileCode2' },
@@ -61,25 +62,31 @@ export const CORE_MODULES: CoreModule[] = [
     id: 'purchase',
     name: 'Purchase & Sourcing',
     slug: 'purchase',
-    path: '/purchase/orders',
+    path: '/purchase/dashboard',
     icon: 'ShoppingBag',
-    description: 'BOM net demand calculation, multi-currency purchase orders, and vendor delivery alerts.',
+    description: '',
     tabs: [
-      { id: 'orders', label: 'Purchase Orders', path: '/purchase/orders', icon: 'Receipt' },
-      { id: 'demand', label: 'BOM Net Demand Engine', path: '/purchase/demand', icon: 'Calculator' },
-      { id: 'vendors', label: 'Vendor Directory', path: '/purchase/vendors', icon: 'Building2' }
+      { id: 'dashboard', label: 'Dashboard', path: '/purchase/dashboard', icon: 'PieChart' },
+      { id: 'rfq', label: 'Outward RFQ', path: '/purchase/rfq', icon: 'Inbox' },
+      { id: 'quotations', label: 'Inward Quotation', path: '/purchase/quotations', icon: 'FileSpreadsheet' },
+      { id: 'orders', label: 'Outward PO', path: '/purchase/orders', icon: 'Receipt' },
+      { id: 'bills', label: 'Purchase Bills', path: '/purchase/bills', icon: 'IndianRupee' },
+      { id: 'price-list', label: 'Price List', path: '/purchase/price-list', icon: 'Calculator' },
+      { id: 'masters', label: 'Master', path: '/purchase/masters', icon: 'Settings' }
     ]
   },
   {
-    id: 'incoming-quality',
-    name: 'Incoming Quality',
-    slug: 'incoming-quality',
-    path: '/incoming-quality/gate-entry',
+    id: 'quality',
+    name: 'Quality',
+    slug: 'quality',
+    path: '/quality/incoming-inspection',
     icon: 'ScanLine',
-    description: 'Quarantine gate inward holding, goods receipt QC inspections, and defect root-cause analysis.',
+    description: '',
     tabs: [
-      { id: 'gate-entry', label: 'Quarantine Gate Entry', path: '/incoming-quality/gate-entry', icon: 'ShieldCheck' },
-      { id: 'inspections', label: 'Goods Receipt QC', path: '/incoming-quality/inspections', icon: 'CheckSquare' }
+      { id: 'incoming-inspection', label: 'Incoming Inspection', path: '/quality/incoming-inspection', icon: 'ShieldCheck' },
+      { id: 'process-inspection', label: 'Process Inspection', path: '/quality/process-inspection', icon: 'CheckSquare' },
+      { id: 'pdi', label: 'PDI', path: '/quality/pdi', icon: 'Award' },
+      { id: 'master', label: 'Master', path: '/quality/master', icon: 'Settings' }
     ]
   },
   {
@@ -88,7 +95,7 @@ export const CORE_MODULES: CoreModule[] = [
     slug: 'store',
     path: '/store/inventory',
     icon: 'Boxes',
-    description: '4-bucket inventory tracking, dual-unit conversion, and hard project allocation locks.',
+    description: '',
     tabs: [
       { id: 'inventory', label: '4-Bucket Stock Ledger', path: '/store/inventory', icon: 'PackageSearch' },
       { id: 'allocations', label: 'Project Hard Allocations', path: '/store/allocations', icon: 'Lock' }
@@ -100,7 +107,7 @@ export const CORE_MODULES: CoreModule[] = [
     slug: 'production-trial',
     path: '/production-trial/assembly',
     icon: 'Wrench',
-    description: 'Sub-assembly progress tracking, stage gate role sign-offs, and machine dry/wet run snag logs.',
+    description: '',
     tabs: [
       { id: 'assembly', label: 'Assembly Workflows', path: '/production-trial/assembly', icon: 'Kanban' },
       { id: 'trials', label: 'Machine Trials & Snags', path: '/production-trial/trials', icon: 'Activity' }
@@ -112,7 +119,7 @@ export const CORE_MODULES: CoreModule[] = [
     slug: 'dispatch',
     path: '/dispatch/verification',
     icon: 'Truck',
-    description: 'Absolute Zero-Snag Block enforcement, shipping dossiers, and vehicle gate pass release.',
+    description: '',
     tabs: [
       { id: 'verification', label: 'Zero-Snag Block & Gate Pass', path: '/dispatch/verification', icon: 'CheckCircle2' }
     ]
@@ -123,9 +130,30 @@ export const CORE_MODULES: CoreModule[] = [
     slug: 'after-sales',
     path: '/after-sales/warranty',
     icon: 'Headphones',
-    description: 'Post-commissioning support, client warranty status, field snags, and spare parts orders.',
+    description: '',
     tabs: [
       { id: 'warranty', label: 'Warranties & Field Tickets', path: '/after-sales/warranty', icon: 'LifeBuoy' }
+    ]
+  },
+  {
+    id: 'masters',
+    name: 'Master Data',
+    slug: 'masters',
+    path: '/masters/vendors',
+    icon: 'Database',
+    description: '',
+    tabs: [
+      { id: 'vendors', label: 'Vendor', path: '/masters/vendors', icon: 'Building2' },
+      { id: 'customers', label: 'Customer', path: '/masters/customers', icon: 'Users' },
+      { id: 'locations', label: 'Store Location', path: '/masters/locations', icon: 'PackageSearch' },
+      { id: 'categories', label: 'Category', path: '/masters/categories', icon: 'FolderGit2' },
+      { id: 'rm-items', label: 'RM Items', path: '/masters/rm-items', icon: 'Layers' },
+      { id: 'bo-items', label: 'BO Items', path: '/masters/bo-items', icon: 'Calculator' },
+      { id: 'components', label: 'Component', path: '/masters/components', icon: 'FileCode2' },
+      { id: 'subassemblies', label: 'Subassembly', path: '/masters/subassemblies', icon: 'Boxes' },
+      { id: 'assemblies', label: 'Assembly', path: '/masters/assemblies', icon: 'Kanban' },
+      { id: 'company-profile', label: 'Company Profile', path: '/masters/company-profile', icon: 'ShieldCheck' },
+      { id: 'settings', label: 'Setting', path: '/masters/settings', icon: 'Settings' }
     ]
   },
   {
@@ -134,7 +162,7 @@ export const CORE_MODULES: CoreModule[] = [
     slug: 'admin',
     path: '/admin/users',
     icon: 'ShieldAlert',
-    description: 'User provisioning, RBAC route matrix, plant IP whitelists, and tamper-proof audit trails.',
+    description: '',
     tabs: [
       { id: 'users', label: 'User Directory', path: '/admin/users', icon: 'Users' },
       { id: 'roles', label: 'Role & RBAC Matrix', path: '/admin/roles', icon: 'KeyRound' },

@@ -69,4 +69,5 @@ export const authenticate = async (req, res, next) => {
 };
 
 export const authenticateToken = authenticate;
+export const requireAuth = authenticate;
 

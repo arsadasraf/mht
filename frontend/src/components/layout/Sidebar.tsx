@@ -15,6 +15,7 @@ import {
   Truck,
   Headphones,
   Sparkles,
+  Database,
   LucideIcon
 } from 'lucide-react';
 import { useAppSelector } from '../../store/hooks';
@@ -31,7 +32,8 @@ const ICON_MAP: Record<string, LucideIcon> = {
   Boxes,
   Wrench,
   Truck,
-  Headphones
+  Headphones,
+  Database
 };
 
 export default function Sidebar() {
@@ -56,7 +58,6 @@ export default function Sidebar() {
         {accessibleModules.map((mod) => {
           const IconComponent = ICON_MAP[mod.icon] || Cpu;
           const active = isModuleActive(mod.slug);
-          const isSpine = mod.isSpine;
 
           if (isSidebarCollapsed) {
             // Icon-Only Rail Mode (Default)
@@ -64,7 +65,7 @@ export default function Sidebar() {
               <Link
                 key={mod.id}
                 href={mod.targetPath}
-                title={`${mod.name}${isSpine ? ' (Master Spine)' : ''}`}
+                title={mod.name}
                 className={`group relative flex items-center justify-center w-11 h-11 mx-auto rounded-xl transition-all cursor-pointer ${
                   active
                     ? 'bg-orange-500 text-white shadow-md'
@@ -72,14 +73,6 @@ export default function Sidebar() {
                 }`}
               >
                 <IconComponent size={19} />
-
-                {/* Spine Indicator Dot in Icon-Only Mode */}
-                {isSpine && !active && (
-                  <span
-                    title="Central Project Spine"
-                    className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-orange-500 ring-2 ring-white"
-                  ></span>
-                )}
               </Link>
             );
           }
@@ -107,12 +100,6 @@ export default function Sidebar() {
                 </div>
                 <span className="truncate">{mod.name}</span>
               </div>
-
-              {isSpine && (
-                <span className="ml-1 text-[10px] font-bold px-1.5 py-0.5 rounded bg-orange-100 text-orange-700 border border-orange-200 flex-shrink-0">
-                  Spine
-                </span>
-              )}
             </Link>
           );
         })}

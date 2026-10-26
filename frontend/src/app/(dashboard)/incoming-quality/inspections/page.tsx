@@ -1,8 +1,5 @@
-'use client';
-
-import React from 'react';
-import InspectionsTab from '../../../../modules/incoming-quality/components/InspectionsTab';
+import { redirect } from 'next/navigation';
 
 export default function InspectionsPage() {
-  return <InspectionsTab />;
+  redirect('/quality/incoming-inspection');
 }

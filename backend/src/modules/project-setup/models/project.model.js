@@ -39,6 +39,14 @@ const ProjectSchema = new mongoose.Schema(
       type: mongoose.Schema.Types.ObjectId,
       ref: 'Quotation'
     },
+    customerPoRef: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'CustomerPo'
+    },
+    customerPoNumber: {
+      type: String,
+      trim: true
+    },
     contractValue: {
       type: MonetaryAmountSchema,
       required: true
