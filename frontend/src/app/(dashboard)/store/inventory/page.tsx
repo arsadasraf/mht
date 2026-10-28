@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import InventoryLedgerTab from '../../../../modules/store/components/InventoryLedgerTab';
+import InventoryTab from '../../../../modules/store/components/InventoryTab';
 
 export default function InventoryPage() {
-  return <InventoryLedgerTab />;
+  return <InventoryTab />;
 }

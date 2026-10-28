@@ -30,6 +30,8 @@ import {
   Settings,
   Boxes,
   Database,
+  Wrench,
+  Truck,
   LucideIcon
 } from 'lucide-react';
 import { getModuleBySlug } from '../../config/modules.config';
@@ -62,7 +64,9 @@ const TAB_ICON_MAP: Record<string, LucideIcon> = {
   PieChart,
   Settings,
   Boxes,
-  Database
+  Database,
+  Wrench,
+  Truck
 };
 
 interface TabNavProps {

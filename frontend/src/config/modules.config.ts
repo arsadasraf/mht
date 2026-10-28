@@ -97,7 +97,10 @@ export const CORE_MODULES: CoreModule[] = [
     icon: 'Boxes',
     description: '',
     tabs: [
-      { id: 'inventory', label: '4-Bucket Stock Ledger', path: '/store/inventory', icon: 'PackageSearch' },
+      { id: 'inventory', label: 'Inventory Ledger', path: '/store/inventory', icon: 'Boxes' },
+      { id: 'wip', label: 'WIP Management', path: '/store/wip', icon: 'Wrench' },
+      { id: 'dc', label: 'Delivery Challan (DC)', path: '/store/dc', icon: 'Truck' },
+      { id: 'master', label: 'Store Master', path: '/store/master', icon: 'Settings' },
       { id: 'allocations', label: 'Project Hard Allocations', path: '/store/allocations', icon: 'Lock' }
     ]
   },
