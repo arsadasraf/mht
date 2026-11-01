@@ -1,35 +1,67 @@
-import { User } from '../models/user.model.js';
+import bcrypt from 'bcryptjs';
+import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
+
+/**
+ * Strips sensitive fields (password, currentRefreshToken) from user records before sending to client.
+ */
+const sanitizeUser = (user) => {
+  if (!user) return null;
+  const { password, currentRefreshToken, ...safeUser } = user;
+  return {
+    ...safeUser,
+    _id: user.id
+  };
+};
+
+const userInclude = {
+  role: true,
+  createdBy: {
+    select: { id: true, firstName: true, lastName: true, email: true }
+  },
+  updatedBy: {
+    select: { id: true, firstName: true, lastName: true, email: true }
+  },
+  loginHistory: {
+    orderBy: { loginAt: 'desc' },
+    take: 10
+  }
+};
 
 export const getUsers = async (req, res, next) => {
   try {
     const { department, status, search, page = 1, limit = 50 } = req.query;
 
-    const query = {};
-    if (department) query.department = department;
-    if (status) query.status = status;
+    const where = {};
+    if (department) where.department = department;
+    if (status) where.status = status;
     if (search) {
-      query.$or = [
-        { firstName: { $regex: search, $options: 'i' } },
-        { lastName: { $regex: search, $options: 'i' } },
-        { email: { $regex: search, $options: 'i' } }
+      where.OR = [
+        { firstName: { contains: search, mode: 'insensitive' } },
+        { lastName: { contains: search, mode: 'insensitive' } },
+        { email: { contains: search, mode: 'insensitive' } }
       ];
     }
 
-    const total = await User.countDocuments(query);
-    const users = await User.find(query)
-      .populate('role')
-      .populate('createdBy', 'firstName lastName email')
-      .populate('updatedBy', 'firstName lastName email')
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit));
+    const pageNum = Math.max(1, Number(page) || 1);
+    const limitNum = Math.max(1, Number(limit) || 50);
+
+    const [total, rawUsers] = await Promise.all([
+      prisma.user.count({ where }),
+      prisma.user.findMany({
+        where,
+        include: userInclude,
+        orderBy: { createdAt: 'desc' },
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum
+      })
+    ]);
 
     res.status(200).json({
       success: true,
       total,
-      page: Number(page),
-      users
+      page: pageNum,
+      users: rawUsers.map(sanitizeUser)
     });
   } catch (error) {
     next(error);
@@ -49,55 +81,74 @@ export const createUser = async (req, res, next) => {
       authMethod = 'BOTH',
       refreshTokenExpiry = '7d',
       isIpRestricted = false,
-      whitelistedIps = []
+      whitelistedIps = [],
+      allowedRoutes = []
     } = req.body;
 
-    const existingUser = await User.findOne({ email: email.toLowerCase() });
+    const normalizedEmail = email.toLowerCase().trim();
+    const existingUser = await prisma.user.findUnique({ where: { email: normalizedEmail } });
     if (existingUser) {
       return res.status(400).json({
         success: false,
-        message: `A user with email '${email}' already exists.`
+        message: `A user with email '${normalizedEmail}' already exists.`
       });
     }
 
-    // If GOOGLE_ONLY and password not provided, generate random secure hash fallback
-    const effectivePassword = password || (authMethod === 'GOOGLE_ONLY' ? `GGL_${Date.now()}_${Math.random().toString(36).substring(2)}` : 'MHT@Initial2026');
+    const rawPassword =
+      password ||
+      (authMethod === 'GOOGLE_ONLY'
+        ? `GGL_${Date.now()}_${Math.random().toString(36).substring(2)}`
+        : 'MHT@Initial2026');
 
-    const newUser = new User({
-      firstName,
-      lastName,
-      email: email.toLowerCase(),
-      password: effectivePassword,
-      role,
-      department,
-      plantLocation,
-      authMethod,
-      refreshTokenExpiry: refreshTokenExpiry || '7d',
-      isIpRestricted,
-      whitelistedIps: Array.isArray(whitelistedIps) ? whitelistedIps : (whitelistedIps ? [whitelistedIps] : []),
-      isActive: true,
-      status: 'ACTIVE',
-      createdBy: req.user?._id,
-      updatedBy: req.user?._id
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(rawPassword, salt);
+
+    const newUser = await prisma.user.create({
+      data: {
+        firstName,
+        lastName,
+        email: normalizedEmail,
+        password: hashedPassword,
+        roleId: role,
+        department,
+        plantLocation,
+        authMethod,
+        refreshTokenExpiry: refreshTokenExpiry || '7d',
+        isIpRestricted: Boolean(isIpRestricted),
+        whitelistedIps: Array.isArray(whitelistedIps)
+          ? whitelistedIps
+          : whitelistedIps
+          ? [whitelistedIps]
+          : [],
+        allowedRoutes: Array.isArray(allowedRoutes) ? allowedRoutes : [],
+        isActive: true,
+        status: 'ACTIVE',
+        createdById: req.user?.id || null,
+        updatedById: req.user?.id || null
+      },
+      include: userInclude
     });
-
-    await newUser.save();
-    const populatedUser = await User.findById(newUser._id).populate('role');
 
     await logAuditEvent({
       req,
       action: 'USER_CREATED',
       module: 'admin',
-      entityId: newUser._id,
+      entityId: newUser.id,
       entityType: 'User',
-      afterData: { email: newUser.email, role, department, authMethod, refreshTokenExpiry },
+      afterData: {
+        email: newUser.email,
+        roleId: role,
+        department,
+        authMethod,
+        refreshTokenExpiry
+      },
       notes: `User ${newUser.email} created with authMethod: ${authMethod}, refresh expiry: ${refreshTokenExpiry}`
     });
 
     res.status(201).json({
       success: true,
-      message: 'User created successfully.',
-      user: populatedUser
+      message: 'All set! User account created successfully.',
+      user: sanitizeUser(newUser)
     });
   } catch (error) {
     next(error);
@@ -121,63 +172,76 @@ export const updateUser = async (req, res, next) => {
       allowedRoutes
     } = req.body;
 
-    const user = await User.findById(id);
-    if (!user) {
+    const existingUser = await prisma.user.findUnique({
+      where: { id },
+      include: { role: true }
+    });
+
+    if (!existingUser) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    const beforeSnapshot = user.toObject();
+    const beforeSnapshot = sanitizeUser(existingUser);
 
-    if (firstName) user.firstName = firstName;
-    if (lastName) user.lastName = lastName;
-    if (role) user.role = role;
-    if (department) user.department = department;
-    if (plantLocation) user.plantLocation = plantLocation;
-    if (authMethod) user.authMethod = authMethod;
-    if (password) user.password = password; // Will be hashed by pre-save hook
-    if (refreshTokenExpiry) user.refreshTokenExpiry = refreshTokenExpiry;
-    if (isIpRestricted !== undefined) user.isIpRestricted = isIpRestricted;
+    const updateData = {
+      updatedById: req.user?.id || null
+    };
+
+    if (firstName !== undefined) updateData.firstName = firstName;
+    if (lastName !== undefined) updateData.lastName = lastName;
+    if (role !== undefined) updateData.roleId = role;
+    if (department !== undefined) updateData.department = department;
+    if (plantLocation !== undefined) updateData.plantLocation = plantLocation;
+    if (authMethod !== undefined) updateData.authMethod = authMethod;
+    if (refreshTokenExpiry !== undefined) updateData.refreshTokenExpiry = refreshTokenExpiry;
+    if (isIpRestricted !== undefined) updateData.isIpRestricted = Boolean(isIpRestricted);
     if (whitelistedIps !== undefined) {
-      user.whitelistedIps = Array.isArray(whitelistedIps) ? whitelistedIps : [whitelistedIps];
+      updateData.whitelistedIps = Array.isArray(whitelistedIps) ? whitelistedIps : [whitelistedIps];
     }
-    if (allowedRoutes !== undefined) user.allowedRoutes = allowedRoutes;
+    if (allowedRoutes !== undefined) {
+      updateData.allowedRoutes = Array.isArray(allowedRoutes) ? allowedRoutes : [];
+    }
+    if (password) {
+      const salt = await bcrypt.genSalt(10);
+      updateData.password = await bcrypt.hash(password, salt);
+    }
 
-    user.updatedBy = req.user?._id;
-    await user.save();
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: updateData,
+      include: userInclude
+    });
 
-    const updatedUser = await User.findById(user._id).populate('role');
+    const sanitizedUpdated = sanitizeUser(updatedUser);
 
     await logAuditEvent({
       req,
       action: 'USER_UPDATED',
       module: 'admin',
-      entityId: user._id,
+      entityId: updatedUser.id,
       entityType: 'User',
       beforeData: beforeSnapshot,
-      afterData: updatedUser.toObject(),
-      notes: `User profile updated. AuthMethod: ${user.authMethod}, Refresh expiry: ${user.refreshTokenExpiry}`
+      afterData: sanitizedUpdated,
+      notes: `User profile updated. AuthMethod: ${updatedUser.authMethod}, Refresh expiry: ${updatedUser.refreshTokenExpiry}`
     });
 
     res.status(200).json({
       success: true,
-      message: 'User updated successfully.',
-      user: updatedUser
+      message: 'Great! User details updated successfully.',
+      user: sanitizedUpdated
     });
   } catch (error) {
     next(error);
   }
 };
 
-/**
- * Get detailed User Preview including profile info and Last 5 Logins
- */
 export const getUserPreview = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const user = await User.findById(id)
-      .populate('role')
-      .populate('createdBy', 'firstName lastName email')
-      .populate('updatedBy', 'firstName lastName email');
+    const user = await prisma.user.findUnique({
+      where: { id },
+      include: userInclude
+    });
 
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
@@ -187,7 +251,7 @@ export const getUserPreview = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      user,
+      user: sanitizeUser(user),
       last5Logins
     });
   } catch (error) {
@@ -195,52 +259,60 @@ export const getUserPreview = async (req, res, next) => {
   }
 };
 
-/**
- * Client Heartbeat Ping: updates isOnline, lastActiveAt, currentActiveTab, usage time
- */
 export const heartbeat = async (req, res, next) => {
   try {
     if (!req.user) {
       return res.status(401).json({ success: false, message: 'Unauthenticated.' });
     }
     const { currentActiveTab } = req.body;
-    const user = await User.findById(req.user._id);
-    if (user) {
-      user.isOnline = true;
-      user.lastActiveAt = new Date();
-      if (currentActiveTab) user.currentActiveTab = currentActiveTab;
-      user.totalUsageMinutes = (user.totalUsageMinutes || 0) + 1;
-      await user.save();
-    }
+
+    await prisma.user.update({
+      where: { id: req.user.id },
+      data: {
+        isOnline: true,
+        lastActiveAt: new Date(),
+        ...(currentActiveTab ? { currentActiveTab } : {}),
+        totalUsageMinutes: { increment: 1 }
+      }
+    });
+
     res.status(200).json({ success: true, timestamp: new Date() });
   } catch (error) {
     next(error);
   }
 };
 
-/**
- * Get all active and recent user sessions for Live Activity Monitor
- */
 export const getActiveSessions = async (req, res, next) => {
   try {
     const fifteenMinsAgo = new Date(Date.now() - 15 * 60 * 1000);
     const startOfToday = new Date();
     startOfToday.setHours(0, 0, 0, 0);
 
-    const users = await User.find({
-      $or: [
-        { isOnline: true },
-        { lastActiveAt: { $gte: startOfToday } },
-        { lastLoginAt: { $gte: startOfToday } }
-      ]
-    })
-      .populate('role')
-      .sort({ lastActiveAt: -1 });
+    const users = await prisma.user.findMany({
+      where: {
+        OR: [
+          { isOnline: true },
+          { lastActiveAt: { gte: startOfToday } },
+          { lastLoginAt: { gte: startOfToday } }
+        ]
+      },
+      include: {
+        role: true,
+        loginHistory: {
+          orderBy: { loginAt: 'desc' },
+          take: 1
+        }
+      },
+      orderBy: { lastActiveAt: 'desc' }
+    });
 
     const sessions = users.map((u) => {
-      const isCurrentlyActive = Boolean(u.lastActiveAt && u.lastActiveAt >= fifteenMinsAgo && u.isOnline);
+      const isCurrentlyActive = Boolean(
+        u.lastActiveAt && u.lastActiveAt >= fifteenMinsAgo && u.isOnline
+      );
       return {
-        _id: u._id,
+        _id: u.id,
+        id: u.id,
         firstName: u.firstName,
         lastName: u.lastName,
         fullName: `${u.firstName} ${u.lastName}`,
@@ -252,7 +324,7 @@ export const getActiveSessions = async (req, res, next) => {
         isOnline: isCurrentlyActive,
         lastActiveAt: u.lastActiveAt || u.lastLoginAt,
         lastLoginAt: u.lastLoginAt,
-        currentActiveTab: u.currentActiveTab || '/crm/dashboard',
+        currentActiveTab: u.currentActiveTab || '/admin/users',
         totalUsageMinutes: u.totalUsageMinutes || 0,
         whitelistedIps: u.whitelistedIps || [],
         isIpRestricted: u.isIpRestricted,
@@ -271,33 +343,34 @@ export const getActiveSessions = async (req, res, next) => {
   }
 };
 
-/**
- * Terminate Active User Session (Force Logout)
- */
 export const terminateSession = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const user = await User.findById(id);
+    const user = await prisma.user.findUnique({ where: { id } });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
 
-    user.currentRefreshToken = null;
-    user.isOnline = false;
-    await user.save();
+    await prisma.user.update({
+      where: { id },
+      data: {
+        currentRefreshToken: null,
+        isOnline: false
+      }
+    });
 
     await logAuditEvent({
       req,
       action: 'SESSION_TERMINATED',
       module: 'admin',
-      entityId: user._id,
+      entityId: user.id,
       entityType: 'User',
       notes: `Admin terminated active session for user ${user.email}`
     });
 
     res.status(200).json({
       success: true,
-      message: `Active session for ${user.firstName} ${user.lastName} has been terminated.`
+      message: `Active session for ${user.firstName} ${user.lastName} has been ended.`
     });
   } catch (error) {
     next(error);
@@ -309,7 +382,7 @@ export const toggleUserStatus = async (req, res, next) => {
     const { id } = req.params;
     const { status } = req.body; // 'ACTIVE' or 'DEACTIVATED'
 
-    const user = await User.findById(id);
+    const user = await prisma.user.findUnique({ where: { id } });
     if (!user) {
       return res.status(404).json({ success: false, message: 'User not found.' });
     }
@@ -317,44 +390,42 @@ export const toggleUserStatus = async (req, res, next) => {
     const newStatus = status || (user.isActive ? 'DEACTIVATED' : 'ACTIVE');
     const isActive = newStatus === 'ACTIVE';
 
-    user.status = newStatus;
-    user.isActive = isActive;
-    user.updatedBy = req.user?._id;
-
-    if (!isActive) {
-      user.deactivatedAt = new Date();
-      user.deactivatedBy = req.user?._id;
-      user.currentRefreshToken = null; // Instantly revoke active session
-    } else {
-      user.deactivatedAt = null;
-      user.deactivatedBy = null;
-    }
-
-    await user.save();
+    const updatedUser = await prisma.user.update({
+      where: { id },
+      data: {
+        status: newStatus,
+        isActive,
+        updatedById: req.user?.id || null,
+        deactivatedAt: isActive ? null : new Date(),
+        deactivatedById: isActive ? null : req.user?.id || null,
+        ...(isActive ? {} : { currentRefreshToken: null, isOnline: false })
+      },
+      include: userInclude
+    });
 
     await logAuditEvent({
       req,
       action: isActive ? 'USER_ACTIVATED' : 'USER_DEACTIVATED',
       module: 'admin',
-      entityId: user._id,
+      entityId: user.id,
       entityType: 'User',
       notes: `User ${user.email} marked as ${newStatus}`
     });
 
     res.status(200).json({
       success: true,
-      message: `User successfully ${isActive ? 'activated' : 'deactivated'}.`,
-      user
+      message: `All set! User account ${isActive ? 'activated' : 'deactivated'} successfully.`,
+      user: sanitizeUser(updatedUser)
     });
   } catch (error) {
     next(error);
   }
 };
 
-// Strict System Block: Reject hard delete requests
 export const deleteUser = async (req, res) => {
   return res.status(405).json({
     success: false,
-    message: 'Strict Security Rule: User accounts cannot be deleted from the database. Use deactivation instead to preserve historical integrity.'
+    message:
+      'User accounts cannot be permanently deleted. Please deactivate the account instead to keep historical records intact.'
   });
 };

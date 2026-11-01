@@ -5,7 +5,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import app from './src/app.js';
-import { connectDatabase } from './src/config/db.config.js';
+import { connectDatabase, disconnectDB } from './src/config/db.config.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -24,6 +24,7 @@ const startServer = async () => {
     const server = app.listen(PORT, () => {
       console.log(`====================================================`);
       console.log(`🚀 Machine House (MH) ERP Server running on port ${PORT}`);
+      console.log(`🐘 Database: PostgreSQL + Prisma ORM`);
       console.log(`🌐 API Base: http://localhost:${PORT}/api/v1`);
       console.log(`💓 Health:   http://localhost:${PORT}/api/v1/health`);
       console.log(`====================================================`);
@@ -38,8 +39,9 @@ const startServer = async () => {
       process.exit(1);
     });
 
-    const gracefulShutdown = () => {
-      server.close(() => {
+    const gracefulShutdown = async () => {
+      server.close(async () => {
+        await disconnectDB();
         process.exit(0);
       });
     };

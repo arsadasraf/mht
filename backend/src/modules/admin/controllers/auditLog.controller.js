@@ -1,31 +1,38 @@
-import { AuditLog } from '../models/auditLog.model.js';
+import { prisma } from '../../../config/db.config.js';
 
 export const getAuditLogs = async (req, res, next) => {
   try {
     const { module, action, search, page = 1, limit = 50 } = req.query;
 
-    const query = {};
-    if (module) query.module = module;
-    if (action) query.action = action;
+    const where = {};
+    if (module) where.module = module;
+    if (action) where.action = action;
     if (search) {
-      query.$or = [
-        { performedByName: { $regex: search, $options: 'i' } },
-        { performedByEmail: { $regex: search, $options: 'i' } },
-        { notes: { $regex: search, $options: 'i' } },
-        { entityId: { $regex: search, $options: 'i' } }
+      where.OR = [
+        { performedByName: { contains: search, mode: 'insensitive' } },
+        { performedByEmail: { contains: search, mode: 'insensitive' } },
+        { notes: { contains: search, mode: 'insensitive' } },
+        { entityId: { contains: search, mode: 'insensitive' } }
       ];
     }
 
-    const total = await AuditLog.countDocuments(query);
-    const logs = await AuditLog.find(query)
-      .sort({ timestamp: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit));
+    const pageNum = Math.max(1, Number(page) || 1);
+    const limitNum = Math.max(1, Number(limit) || 50);
+
+    const [total, logs] = await Promise.all([
+      prisma.auditLog.count({ where }),
+      prisma.auditLog.findMany({
+        where,
+        orderBy: { timestamp: 'desc' },
+        skip: (pageNum - 1) * limitNum,
+        take: limitNum
+      })
+    ]);
 
     res.status(200).json({
       success: true,
       total,
-      page: Number(page),
+      page: pageNum,
       logs
     });
   } catch (error) {

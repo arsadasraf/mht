@@ -1,0 +1,166 @@
+enum Department {
+  ADMIN
+  MARKETING_SALES
+  PROJECT_SETUP
+  DESIGN_ENGINEERING
+  PURCHASE_PROCUREMENT
+  INCOMING_QUALITY
+  STORES_WAREHOUSE
+  PRODUCTION_ASSEMBLY
+  DISPATCH_LOGISTICS
+  AFTER_SALES
+}
+
+enum AuthMethod {
+  GOOGLE_ONLY
+  PASSWORD_ONLY
+  BOTH
+}
+
+enum UserStatus {
+  ACTIVE
+  DEACTIVATED
+}
+
+enum DeviceType {
+  Desktop
+  Tablet
+  Mobile
+  Unknown
+}
+
+enum AuthMethodUsed {
+  GOOGLE_SSO
+  EMAIL_PASSWORD
+}
+
+enum LoginStatus {
+  SUCCESS
+  FAILED
+  BLOCKED_IP
+}
+
+model Role {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @unique
+  slug          String   @unique
+  description   String?
+  allowedRoutes String[] @default([])
+  isSystemRole  Boolean  @default(false)
+
+  users         User[]   @relation("UserRole")
+
+  createdById   String?  @db.Uuid
+  createdBy     User?    @relation("RoleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  updatedById   String?  @db.Uuid
+  updatedBy     User?    @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("roles")
+}
+
+model User {
+  id                   String      @id @default(uuid()) @db.Uuid
+  firstName            String
+  lastName             String
+  email                String      @unique
+  password             String?
+  googleId             String?     @unique
+
+  roleId               String      @db.Uuid
+  role                 Role        @relation("UserRole", fields: [roleId], references: [id], onDelete: Restrict)
+
+  department           Department
+  plantLocation        String      @default("Main Works - Unit 1 (Bengaluru)")
+  authMethod           AuthMethod  @default(BOTH)
+
+  // Real-time Presence & Usage Tracking
+  isOnline             Boolean     @default(false)
+  lastActiveAt         DateTime    @default(now())
+  currentActiveTab     String      @default("/crm/dashboard")
+  totalUsageMinutes    Int         @default(0)
+
+  // Session & Security Governance
+  refreshTokenExpiry   String      @default("7d")
+  currentRefreshToken  String?
+  lastLoginAt          DateTime?
+
+  // Non-deletable Account Status
+  isActive             Boolean     @default(true)
+  isSuperAdmin         Boolean     @default(false)
+  status               UserStatus  @default(ACTIVE)
+  deactivatedAt        DateTime?
+  deactivatedById      String?     @db.Uuid
+  deactivatedBy        User?       @relation("UserDeactivatedBy", fields: [deactivatedById], references: [id], onDelete: SetNull)
+  deactivatedUsers     User[]      @relation("UserDeactivatedBy")
+
+  // IP Restrictions & Route Overrides
+  isIpRestricted       Boolean     @default(false)
+  whitelistedIps       String[]    @default([])
+  allowedRoutes        String[]    @default([])
+
+  // Universal Action Tracking
+  createdById          String?     @db.Uuid
+  createdBy            User?       @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdUsers         User[]      @relation("UserCreatedBy")
+
+  updatedById          String?     @db.Uuid
+  updatedBy            User?       @relation("UserUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedUsers         User[]      @relation("UserUpdatedBy")
+
+  // Relations
+  loginHistory         UserLoginHistory[]
+  auditLogs            AuditLog[]  @relation("AuditPerformedBy")
+  rolesCreated         Role[]      @relation("RoleCreatedBy")
+  rolesUpdated         Role[]      @relation("RoleUpdatedBy")
+
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@index([department])
+  @@index([status])
+  @@map("users")
+}
+
+model UserLoginHistory {
+  id                     String         @id @default(uuid()) @db.Uuid
+  userId                 String         @db.Uuid
+  user                   User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  loginAt                DateTime       @default(now())
+  ipAddress              String?
+  userAgent              String?
+  deviceType             DeviceType     @default(Desktop)
+  authMethodUsed         AuthMethodUsed @default(EMAIL_PASSWORD)
+  status                 LoginStatus    @default(SUCCESS)
+  sessionDurationMinutes Int            @default(0)
+
+  @@index([userId, loginAt(sort: Desc)])
+  @@map("user_login_history")
+}
+
+model AuditLog {
+  id                 String   @id @default(uuid()) @db.Uuid
+  action             String
+  module             String
+  entityId           String?
+  entityType         String?
+
+  performedById      String?  @db.Uuid
+  performedBy        User?    @relation("AuditPerformedBy", fields: [performedById], references: [id], onDelete: SetNull)
+  performedByName    String   @default("System")
+  performedByEmail   String?
+  role               String?
+
+  ipAddress          String   @default("127.0.0.1")
+  userAgent          String?
+  beforeDataSnapshot Json?
+  afterDataSnapshot  Json?
+  notes              String?
+  timestamp          DateTime @default(now())
+
+  @@index([module, timestamp(sort: Desc)])
+  @@index([action])
+  @@map("audit_logs")
+}

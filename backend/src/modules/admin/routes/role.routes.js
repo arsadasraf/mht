@@ -2,6 +2,8 @@ import { Router } from 'express';
 import { getRoles, updateRolePermissions, createRole } from '../controllers/role.controller.js';
 import { authenticate } from '../../../middleware/auth.middleware.js';
 import { authorizeRouteAccess } from '../../../middleware/rbac.middleware.js';
+import { validateRequest } from '../../../middleware/validate.middleware.js';
+import { createRoleSchema, updateRolePermissionsSchema } from '../validators/role.validator.js';
 
 const router = Router();
 
@@ -9,7 +11,7 @@ const router = Router();
 router.use(authenticate, authorizeRouteAccess('/admin/roles'));
 
 router.get('/', getRoles);
-router.post('/', createRole);
-router.put('/:id', updateRolePermissions);
+router.post('/', validateRequest(createRoleSchema), createRole);
+router.put('/:id', validateRequest(updateRolePermissionsSchema), updateRolePermissions);
 
 export default router;

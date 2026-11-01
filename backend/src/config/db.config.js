@@ -1,33 +1,67 @@
-import mongoose from 'mongoose';
+import { PrismaClient } from '@prisma/client';
 
-export const connectDB = async () => {
-  const primaryUri = process.env.MONGODB_URI || 'mongodb://127.0.0.1:27017/mht_erp';
-  try {
-    const conn = await mongoose.connect(primaryUri, {
-      serverSelectionTimeoutMS: 4000,
-      autoIndex: true
-    });
-    console.log(`[Database] MongoDB Connected: ${conn.connection.host}/${conn.connection.name}`);
-    return conn;
-  } catch (error) {
-    // If running inside Docker and primary URI points to localhost, auto-retry with docker service hostname
-    if (primaryUri.includes('127.0.0.1') || primaryUri.includes('localhost')) {
-      const dockerUri = primaryUri.replace('127.0.0.1', 'mongodb').replace('localhost', 'mongodb');
-      try {
-        console.log(`[Database] Retrying connection with Docker service name: ${dockerUri}...`);
-        const conn = await mongoose.connect(dockerUri, {
-          serverSelectionTimeoutMS: 5000,
-          autoIndex: true
-        });
-        console.log(`[Database] MongoDB Connected via Docker network: ${conn.connection.host}/${conn.connection.name}`);
-        return conn;
-      } catch (retryError) {
-        console.error(`[Database Error] Docker network connection failed: ${retryError.message}`);
+const basePrisma = new PrismaClient({
+  log: process.env.NODE_ENV === 'development' ? ['warn', 'error'] : ['error']
+});
+
+/**
+ * Extended Prisma Client:
+ * 1. Automatically computes `_id` on all returned records for 100% frontend RTK Query compatibility.
+ * 2. Enforces Strict User Deactivation Rule (blocks hard deletion of User accounts).
+ * 3. Enforces Immutable Audit Log Rule (blocks update or deletion of AuditLog records).
+ */
+export const prisma = basePrisma.$extends({
+  result: {
+    $allModels: {
+      _id: {
+        needs: { id: true },
+        compute(model) {
+          return model.id;
+        }
       }
     }
-    console.error(`[Database Error] Connection failed: ${error.message}`);
+  },
+  query: {
+    user: {
+      async delete() {
+        throw new Error('Strict System Rule Violation: User accounts cannot be deleted. Deactivate the account instead.');
+      },
+      async deleteMany() {
+        throw new Error('Strict System Rule Violation: User accounts cannot be deleted. Deactivate the account instead.');
+      }
+    },
+    auditLog: {
+      async update() {
+        throw new Error('Security Block: Audit logs are immutable and cannot be updated.');
+      },
+      async updateMany() {
+        throw new Error('Security Block: Audit logs are immutable and cannot be updated.');
+      },
+      async delete() {
+        throw new Error('Security Block: Audit logs are immutable and cannot be deleted.');
+      },
+      async deleteMany() {
+        throw new Error('Security Block: Audit logs are immutable and cannot be deleted.');
+      }
+    }
+  }
+});
+
+export { basePrisma };
+
+export const connectDB = async () => {
+  try {
+    await basePrisma.$connect();
+    console.log('[Database] PostgreSQL Connected via Prisma ORM');
+    return prisma;
+  } catch (error) {
+    console.error(`[Database Error] PostgreSQL connection failed: ${error.message}`);
     process.exit(1);
   }
+};
+
+export const disconnectDB = async () => {
+  await basePrisma.$disconnect();
 };
 
 export const connectDatabase = connectDB;

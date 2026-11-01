@@ -1,9 +1,11 @@
-import { Role } from '../models/role.model.js';
+import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
 
 export const getRoles = async (req, res, next) => {
   try {
-    const roles = await Role.find().sort({ createdAt: 1 });
+    const roles = await prisma.role.findMany({
+      orderBy: { createdAt: 'asc' }
+    });
     res.status(200).json({ success: true, count: roles.length, roles });
   } catch (error) {
     next(error);
@@ -15,33 +17,37 @@ export const updateRolePermissions = async (req, res, next) => {
     const { id } = req.params;
     const { allowedRoutes, description } = req.body;
 
-    const role = await Role.findById(id);
-    if (!role) {
+    const existingRole = await prisma.role.findUnique({ where: { id } });
+    if (!existingRole) {
       return res.status(404).json({ success: false, message: 'Role not found.' });
     }
 
-    const beforeRoutes = [...role.allowedRoutes];
-    if (allowedRoutes) role.allowedRoutes = allowedRoutes;
-    if (description) role.description = description;
-    role.updatedBy = req.user?._id;
+    const beforeRoutes = [...(existingRole.allowedRoutes || [])];
 
-    await role.save();
+    const updatedRole = await prisma.role.update({
+      where: { id },
+      data: {
+        ...(allowedRoutes !== undefined ? { allowedRoutes } : {}),
+        ...(description !== undefined ? { description } : {}),
+        updatedById: req.user?.id || null
+      }
+    });
 
     await logAuditEvent({
       req,
       action: 'ROLE_PERMISSIONS_UPDATED',
       module: 'admin',
-      entityId: role._id,
+      entityId: updatedRole.id,
       entityType: 'Role',
       beforeData: { allowedRoutes: beforeRoutes },
-      afterData: { allowedRoutes: role.allowedRoutes },
-      notes: `Permissions updated for role ${role.name}`
+      afterData: { allowedRoutes: updatedRole.allowedRoutes },
+      notes: `Permissions updated for role ${updatedRole.name}`
     });
 
     res.status(200).json({
       success: true,
-      message: `Permissions updated for role '${role.name}'.`,
-      role
+      message: `All set! Permissions updated for '${updatedRole.name}'.`,
+      role: updatedRole
     });
   } catch (error) {
     next(error);
@@ -52,40 +58,58 @@ export const createRole = async (req, res, next) => {
   try {
     const { name, slug, description, allowedRoutes = [] } = req.body;
     if (!name || !slug) {
-      return res.status(400).json({ success: false, message: 'Role name and unique slug are required.' });
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide both a role name and a unique slug.'
+      });
     }
 
     const cleanSlug = slug.toLowerCase().replace(/[^a-z0-9_-]/g, '-');
-    const existing = await Role.findOne({ $or: [{ name }, { slug: cleanSlug }] });
-    if (existing) {
-      return res.status(400).json({ success: false, message: `Role '${name}' or slug '${cleanSlug}' already exists.` });
-    }
-
-    const newRole = new Role({
-      name,
-      slug: cleanSlug,
-      description: description || '',
-      allowedRoutes,
-      isSystemRole: false,
-      createdBy: req.user?._id,
-      updatedBy: req.user?._id
+    const existing = await prisma.role.findFirst({
+      where: {
+        OR: [
+          { name: { equals: name, mode: 'insensitive' } },
+          { slug: cleanSlug }
+        ]
+      }
     });
 
-    await newRole.save();
+    if (existing) {
+      return res.status(400).json({
+        success: false,
+        message: `A role with name '${name}' or slug '${cleanSlug}' already exists.`
+      });
+    }
+
+    const newRole = await prisma.role.create({
+      data: {
+        name: name.trim(),
+        slug: cleanSlug,
+        description: description || '',
+        allowedRoutes: Array.isArray(allowedRoutes) ? allowedRoutes : [],
+        isSystemRole: false,
+        createdById: req.user?.id || null,
+        updatedById: req.user?.id || null
+      }
+    });
 
     await logAuditEvent({
       req,
       action: 'ROLE_CREATED',
       module: 'admin',
-      entityId: newRole._id,
+      entityId: newRole.id,
       entityType: 'Role',
-      afterData: { name: newRole.name, slug: newRole.slug, allowedRoutes: newRole.allowedRoutes },
+      afterData: {
+        name: newRole.name,
+        slug: newRole.slug,
+        allowedRoutes: newRole.allowedRoutes
+      },
       notes: `Custom role '${newRole.name}' created with ${newRole.allowedRoutes.length} allowed routes.`
     });
 
     res.status(201).json({
       success: true,
-      message: `Role '${newRole.name}' created successfully.`,
+      message: `All set! Role '${newRole.name}' created successfully.`,
       role: newRole
     });
   } catch (error) {

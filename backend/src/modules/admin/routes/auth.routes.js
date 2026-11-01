@@ -9,13 +9,15 @@ import {
 } from '../controllers/auth.controller.js';
 import { authRateLimiter } from '../../../middleware/rateLimiter.middleware.js';
 import { authenticate } from '../../../middleware/auth.middleware.js';
+import { validateRequest } from '../../../middleware/validate.middleware.js';
+import { loginSchema, googleLoginSchema } from '../validators/auth.validator.js';
 
 const router = Router();
 
-// Public auth endpoints protected with rate limiting (10 req/min)
+// Public auth endpoints protected with rate limiting (10 req/min) & Zod validation
 router.get('/config', getAuthConfig);
-router.post('/login', authRateLimiter, login);
-router.post('/google', authRateLimiter, googleLogin);
+router.post('/login', authRateLimiter, validateRequest(loginSchema), login);
+router.post('/google', authRateLimiter, validateRequest(googleLoginSchema), googleLogin);
 router.post('/refresh', refreshSession);
 
 // Session-protected auth endpoints

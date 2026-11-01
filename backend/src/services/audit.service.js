@@ -1,8 +1,8 @@
-import mongoose from 'mongoose';
+import { prisma } from '../config/db.config.js';
 
 /**
- * Immutable Audit Logger Service
- * Append-only logging of critical operational changes, stage transitions, ECOs, and security events.
+ * Immutable Audit Logger Service (PostgreSQL + Prisma)
+ * Append-only logging of critical operational changes, stage transitions, and security events.
  */
 export const logAuditEvent = async ({
   req,
@@ -15,30 +15,30 @@ export const logAuditEvent = async ({
   notes = ''
 }) => {
   try {
-    const AuditLog = mongoose.model('AuditLog');
     const user = req?.user;
-
-    const clientIp = req?.headers?.['x-forwarded-for']?.split(',')[0].trim() || req?.socket?.remoteAddress || 'system';
+    const clientIp =
+      req?.headers?.['x-forwarded-for']?.split(',')[0]?.trim() ||
+      req?.socket?.remoteAddress ||
+      '127.0.0.1';
     const userAgent = req?.headers?.['user-agent'] || 'system';
 
-    const auditEntry = new AuditLog({
-      action,
-      module,
-      entityId: entityId ? entityId.toString() : undefined,
-      entityType,
-      performedBy: user?._id,
-      performedByName: user ? `${user.firstName} ${user.lastName}` : 'System',
-      performedByEmail: user?.email || 'system@machinehouse.local',
-      role: user?.role?.name || user?.role || 'SYSTEM',
-      ipAddress: clientIp,
-      userAgent,
-      beforeDataSnapshot: beforeData,
-      afterDataSnapshot: afterData,
-      notes,
-      timestamp: new Date()
+    await prisma.auditLog.create({
+      data: {
+        action,
+        module,
+        entityId: entityId ? String(entityId) : null,
+        entityType: entityType || null,
+        performedById: user?.id || null,
+        performedByName: user ? `${user.firstName} ${user.lastName}` : 'System',
+        performedByEmail: user?.email || 'system@machinehouse.local',
+        role: user?.role?.name || (typeof user?.role === 'string' ? user.role : 'SYSTEM'),
+        ipAddress: clientIp,
+        userAgent,
+        beforeDataSnapshot: beforeData ? JSON.parse(JSON.stringify(beforeData)) : undefined,
+        afterDataSnapshot: afterData ? JSON.parse(JSON.stringify(afterData)) : undefined,
+        notes: notes || null
+      }
     });
-
-    await auditEntry.save();
   } catch (error) {
     console.error('[Audit Service Error] Failed to write audit log:', error.message);
   }
