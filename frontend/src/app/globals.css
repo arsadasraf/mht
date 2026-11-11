@@ -267,3 +267,117 @@ button {
   font-weight: 600;
   color: var(--brand-orange);
 }
+
+/* =========================================================================
+   Universal Print & PDF Export Architecture
+   Enforces exact brand colors, clean A4 pagination, and isolates documents
+   ========================================================================= */
+@media print {
+  @page {
+    size: A4 portrait;
+    margin: 8mm 10mm;
+  }
+
+  *, *::before, *::after {
+    -webkit-print-color-adjust: exact !important;
+    print-color-adjust: exact !important;
+    color-adjust: exact !important;
+  }
+
+  html, body {
+    background: #ffffff !important;
+    color: #0f172a !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    height: auto !important;
+    min-height: 100% !important;
+    overflow: visible !important;
+    font-size: 12px;
+  }
+
+  /* Hide app chrome, headers, sidebars, navigation, action buttons */
+  header, nav, aside,
+  .print\:hidden, .no-print, [data-no-print="true"] {
+    display: none !important;
+  }
+
+  /* When printing an overlay/modal container */
+  .oa-modal-overlay {
+    position: static !important;
+    inset: auto !important;
+    background: transparent !important;
+    backdrop-filter: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    display: block !important;
+    z-index: auto !important;
+  }
+
+  .oa-modal-card {
+    border: none !important;
+    box-shadow: none !important;
+    max-height: none !important;
+    height: auto !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow: visible !important;
+    margin: 0 !important;
+    border-radius: 0 !important;
+    background: #ffffff !important;
+  }
+
+  .oa-modal-body {
+    overflow: visible !important;
+    height: auto !important;
+    max-height: none !important;
+    padding: 0 !important;
+    margin: 0 !important;
+    background: transparent !important;
+    gap: 0 !important;
+  }
+
+  /* Each A4 Document Page */
+  .oa-print-page {
+    box-shadow: none !important;
+    border: 1px solid #64748b !important;
+    border-radius: 0 !important;
+    margin: 0 0 0 0 !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    min-height: 272mm !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: space-between !important;
+    page-break-inside: avoid !important;
+    break-inside: avoid !important;
+  }
+
+  .oa-page-break {
+    page-break-after: always !important;
+    break-after: page !important;
+  }
+
+  /* Brand color enforcement for printing */
+  .bg-orange-400, .bg-orange-400\/90, .bg-orange-400\/85 {
+    background-color: #fb923c !important;
+    color: #020617 !important;
+  }
+
+  .bg-orange-500 {
+    background-color: #f97316 !important;
+    color: #ffffff !important;
+  }
+
+  .bg-amber-50, .bg-amber-50\/80 {
+    background-color: #fffbeb !important;
+  }
+
+  .border-slate-500 {
+    border-color: #64748b !important;
+  }
+}
+

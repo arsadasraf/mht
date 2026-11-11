@@ -46,6 +46,8 @@ export default function CustomerBulkImportModal({
   const handleDownloadTemplate = () => {
     const headers = [
       'Company Name *',
+      'Brief About Customer Business',
+      'Any Other Information',
       'Primary Contact Person *',
       'Designation',
       'Mobile *',
@@ -69,6 +71,8 @@ export default function CustomerBulkImportModal({
       headers,
       [
         'Bharat Heavy Electricals Ltd',
+        'Power distribution & heavy transformer manufacturer',
+        'Strategic PSU vendor code registered',
         'K. S. Narayanan',
         'Head of Sourcing',
         '+91 9845012345',
@@ -89,6 +93,8 @@ export default function CustomerBulkImportModal({
       ],
       [
         'Schneider Electric India Pvt Ltd',
+        'Low & medium voltage switchgear and coil assemblies',
+        'Global vendor portal onboarding active',
         'Deepak Verma',
         'Senior Procurement Lead',
         '+91 9876543210',

@@ -27,6 +27,7 @@ export interface GetLeadsParams {
 export interface GetCustomerPosParams {
   search?: string;
   status?: string;
+  oaStatus?: string;
   page?: number;
   limit?: number;
 }

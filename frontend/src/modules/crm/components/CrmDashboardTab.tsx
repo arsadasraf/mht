@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   TrendingUp,
   Inbox,
@@ -22,6 +23,7 @@ import {
   ArrowRight
 } from 'lucide-react';
 import { useGetCrmOverviewQuery } from '../api/crmApi';
+import SalesDashboardSubTab from './SalesDashboardSubTab';
 
 // Indian Numbering Formatter (Lakhs & Crores)
 const formatINR = (amount?: number | string): string => {
@@ -62,7 +64,16 @@ const STAGE_CONFIG = [
   { key: 'LOST', label: 'Closed (Lost)', color: 'bg-slate-400', text: 'text-slate-700', bg: 'bg-slate-100', border: 'border-slate-200' }
 ];
 
-export default function CrmDashboardTab() {
+export default function CrmDashboardTab({
+  initialSubTab
+}: {
+  initialSubTab?: 'sales' | 'enquiry';
+} = {}) {
+  const pathname = usePathname();
+  const activeSubTab: 'sales' | 'enquiry' =
+    initialSubTab ||
+    (pathname?.endsWith('/enquiry') ? 'enquiry' : 'sales');
+
   // Filter States
   const [dateScope, setDateScope] = useState('this_month');
   const [fromDate, setFromDate] = useState('');
@@ -79,7 +90,9 @@ export default function CrmDashboardTab() {
     source: source !== 'ALL' ? source : undefined
   };
 
-  const { data, isLoading, isError, refetch } = useGetCrmOverviewQuery(queryParams);
+  const { data, isLoading, isError, refetch } = useGetCrmOverviewQuery(queryParams, {
+    skip: activeSubTab !== 'enquiry'
+  });
 
   const rawData = data as unknown as {
     metrics?: {
@@ -114,8 +127,39 @@ export default function CrmDashboardTab() {
 
   return (
     <div className="space-y-6">
-      {/* 1. Focused Single-Line Action & Filter Toolbar */}
-      <div className="bg-white border border-slate-200 rounded-2xl p-2.5 sm:p-3 shadow-xs flex flex-wrap items-center justify-between gap-2.5">
+      {/* Top Button-Type Sub-Tabs */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-1">
+        <Link
+          href="/crm/dashboard/sales"
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+            activeSubTab === 'sales'
+              ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <TrendingUp size={15} />
+          <span>Sales &amp; Orders Dashboard</span>
+        </Link>
+
+        <Link
+          href="/crm/dashboard/enquiry"
+          className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all cursor-pointer shrink-0 ${
+            activeSubTab === 'enquiry'
+              ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+              : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+          }`}
+        >
+          <Inbox size={15} />
+          <span>Enquiry &amp; Pipeline Dashboard</span>
+        </Link>
+      </div>
+
+      {activeSubTab === 'sales' ? (
+        <SalesDashboardSubTab />
+      ) : (
+        <div className="space-y-6">
+          {/* 1. Focused Single-Line Action & Filter Toolbar */}
+          <div className="bg-white border border-slate-200 rounded-2xl p-2.5 sm:p-3 shadow-xs flex flex-wrap items-center justify-between gap-2.5">
         {/* Left: Date Scope Quick Pills (Segmented Button Pills) */}
         <div className="flex flex-wrap items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200">
           {[
@@ -457,5 +501,7 @@ export default function CrmDashboardTab() {
         </div>
       </div>
     </div>
-  );
+  )}
+</div>
+);
 }

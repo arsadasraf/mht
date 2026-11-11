@@ -1,4 +1,4 @@
-import { getPresignedUploadUrl, getPresignedDownloadUrl, generatePresignedUrl } from '../config/s3.config.js';
+import { getPresignedUploadUrl, getPresignedDownloadUrl, generatePresignedUrl, getS3Client } from '../config/s3.config.js';
 import { PutObjectCommand, S3Client } from '@aws-sdk/client-s3';
 
 const s3Client = new S3Client({
@@ -79,19 +79,22 @@ export const getDownloadUrl = async (req, res, next) => {
  */
 export const directUpload = async (req, res, next) => {
   try {
-    const { key, base64Data, contentType = 'application/pdf' } = req.body;
+    const key = req.body?.key;
+    const rawData = req.body?.base64Data || req.body?.fileData;
+    const contentType = req.body?.contentType || 'application/octet-stream';
 
-    if (!key || !base64Data) {
+    if (!key || !rawData) {
       return res.status(400).json({
         success: false,
-        message: 'Both key and base64Data are required'
+        message: 'Both key and file data (base64Data) are required'
       });
     }
 
     const cleanKey = key.replace(/^\/+/, '');
-    const buffer = Buffer.from(base64Data.replace(/^data:[^;]+;base64,/, ''), 'base64');
+    const buffer = Buffer.from(rawData.replace(/^data:[^;]+;base64,/, ''), 'base64');
     const bucket = process.env.AWS_S3_BUCKET_NAME || 'aws-mht';
 
+    const client = getS3Client() || s3Client;
     const command = new PutObjectCommand({
       Bucket: bucket,
       Key: cleanKey,
@@ -99,7 +102,7 @@ export const directUpload = async (req, res, next) => {
       ContentType: contentType
     });
 
-    await s3Client.send(command);
+    await client.send(command);
 
     // Generate signed download URL for immediate access
     const signedUrl = await getPresignedDownloadUrl(cleanKey, 900);

@@ -1,0 +1,87 @@
+model DesignItemMaster {
+  id               String                  @id @default(uuid()) @db.Uuid
+  itemCode         String                  @unique
+  itemName         String
+  itemType         String                  @default("COMPONENT") // RM, BO, COMPONENT, SUB_ASSEMBLY, ASSEMBLY
+  category         String                  @default("Mechanical")
+  subAssemblyGroup String                  @default("")
+  makeOrBuy        String                  @default("BUY") // MAKE or BUY
+
+  baseUom          String                  @default("Nos")
+  altUom           String                  @default("Nos")
+  conversionRatio  Float                   @default(1)
+  hsnCode          String                  @default("8479")
+  standardRateINR  Float                   @default(0)
+
+  drawingNumber    String                  @default("")
+  currentVersion   String                  @default("v1")
+  specifications   String                  @default("")
+  primaryPhotoUrl  String                  @default("")
+  primaryPdfUrl    String                  @default("")
+  primaryCadUrl    String                  @default("")
+
+  // For SUB_ASSEMBLY and ASSEMBLY: list of child items [{ itemCode, itemName, itemType, makeOrBuy, quantity, uom, subAssemblyGroup, drawingNumber }]
+  childItems       Json                    @default("[]")
+
+  isActive         Boolean                 @default(true)
+  fileVersions     DesignItemFileVersion[]
+
+  // Universal Action Tracking
+  createdById      String?                 @db.Uuid
+  createdByName    String                  @default("")
+  updatedById      String?                 @db.Uuid
+  updatedByName    String                  @default("")
+  createdAt        DateTime                @default(now())
+  updatedAt        DateTime                @updatedAt
+
+  @@index([itemType])
+  @@index([itemCode])
+  @@index([isActive])
+  @@map("design_item_masters")
+}
+
+model DesignItemFileVersion {
+  id              String           @id @default(uuid()) @db.Uuid
+  designItemId    String           @db.Uuid
+  designItem      DesignItemMaster @relation(fields: [designItemId], references: [id], onDelete: Cascade)
+
+  itemCode        String
+  versionNumber   Int              @default(1)
+  versionCode     String           @default("v1")
+  fileCategory    String           @default("PDF_2D") // PHOTO, PDF_2D, CAD_3D, SPEC_SHEET
+  fileName        String
+  fileUrl         String           @default("")
+  s3Key           String           @default("")
+  mimeType        String           @default("application/pdf")
+  changeNotes     String           @default("")
+  isLatestVersion Boolean          @default(true)
+
+  // Universal Action Tracking
+  createdById     String?          @db.Uuid
+  createdByName   String           @default("")
+  updatedById     String?          @db.Uuid
+  updatedByName   String           @default("")
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([designItemId])
+  @@index([itemCode])
+  @@map("design_item_file_versions")
+}
+
+model DesignMasterConfig {
+  id               String   @id @default(uuid()) @db.Uuid
+  configKey        String   @unique @default("GLOBAL_DESIGN_MASTER_CONFIG")
+  prefixLockPolicy Json
+
+  // Universal Action Tracking
+  createdById      String?  @db.Uuid
+  createdByName    String   @default("")
+  updatedById      String?  @db.Uuid
+  updatedByName    String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("design_master_configs")
+}
+

@@ -1,19 +1,29 @@
-import { ServiceTicket } from '../models/serviceTicket.model.js';
+import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
+
+const getActorName = (user) => {
+  if (!user) return 'System';
+  return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || user.email || 'System';
+};
 
 export const getServiceTickets = async (req, res, next) => {
   try {
     const { projectId, status, serviceType } = req.query;
-    const query = {};
-    if (projectId) query.projectId = projectId.toUpperCase();
-    if (status) query.status = status;
-    if (serviceType) query.serviceType = serviceType;
+    const where = {};
+    if (projectId) where.projectId = String(projectId).toUpperCase();
+    if (status) where.status = String(status);
+    if (serviceType) where.serviceType = String(serviceType);
 
-    const tickets = await ServiceTicket.find(query)
-      .populate('fieldEngineer', 'firstName lastName email')
-      .sort({ createdAt: -1 });
+    const tickets = await prisma.serviceTicket.findMany({
+      where,
+      orderBy: { createdAt: 'desc' }
+    });
 
-    res.status(200).json({ success: true, count: tickets.length, tickets });
+    res.status(200).json({
+      success: true,
+      count: tickets.length,
+      tickets: tickets.map((t) => ({ ...t, _id: t.id }))
+    });
   } catch (error) {
     next(error);
   }
@@ -21,37 +31,53 @@ export const getServiceTickets = async (req, res, next) => {
 
 export const createServiceTicket = async (req, res, next) => {
   try {
-    const count = await ServiceTicket.countDocuments();
+    const count = await prisma.serviceTicket.count();
     const ticketNumber = `TKT-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const actorName = getActorName(req.user);
 
-    const { projectId, customerName, serviceType, title, description, severity, warrantyStatus, fieldEngineer } = req.body;
-
-    const ticket = new ServiceTicket({
-      ticketNumber,
-      projectId: projectId.toUpperCase(),
-      customerName,
-      serviceType,
+    const {
+      projectId,
+      customerName = 'Customer',
+      serviceType = 'WARRANTY_CLAIM',
       title,
-      description,
-      severity: severity || 'MEDIUM',
-      warrantyStatus: warrantyStatus || 'UNDER_WARRANTY',
-      fieldEngineer,
-      createdBy: req.user?._id,
-      updatedBy: req.user?._id
-    });
+      description = '',
+      severity = 'MEDIUM',
+      warrantyStatus = 'UNDER_WARRANTY',
+      fieldEngineerName = ''
+    } = req.body;
 
-    await ticket.save();
+    const ticket = await prisma.serviceTicket.create({
+      data: {
+        ticketNumber,
+        projectId: String(projectId || 'PRJ-2026-1001').toUpperCase(),
+        customerName,
+        serviceType,
+        title: title || 'Field Service Request',
+        description,
+        severity,
+        warrantyStatus,
+        fieldEngineerName,
+        createdById: req.user?.id || null,
+        createdByName: actorName,
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
+    });
 
     await logAuditEvent({
       req,
       action: 'SERVICE_TICKET_CREATED',
       module: 'after-sales',
-      entityId: ticket._id,
+      entityId: ticket.id,
       entityType: 'ServiceTicket',
-      notes: `Service Ticket ${ticketNumber} logged for project ${projectId}. Severity: ${ticket.severity}`
+      notes: `Service Ticket ${ticketNumber} logged for project ${ticket.projectId}.`
     });
 
-    res.status(201).json({ success: true, message: 'Service ticket created successfully.', ticket });
+    res.status(201).json({
+      success: true,
+      message: `All set! Service ticket ${ticketNumber} created.`,
+      ticket: { ...ticket, _id: ticket.id }
+    });
   } catch (error) {
     next(error);
   }
@@ -60,34 +86,40 @@ export const createServiceTicket = async (req, res, next) => {
 export const updateTicketStatus = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { status, resolutionNotes, fieldEngineer } = req.body;
+    const { status, resolutionNotes, fieldEngineerName } = req.body;
+    const actorName = getActorName(req.user);
 
-    const ticket = await ServiceTicket.findById(id);
-    if (!ticket) {
+    const existing = await prisma.serviceTicket.findUnique({ where: { id } });
+    if (!existing) {
       return res.status(404).json({ success: false, message: 'Service ticket not found.' });
     }
 
-    if (status) ticket.status = status;
-    if (resolutionNotes) ticket.resolutionNotes = resolutionNotes;
-    if (fieldEngineer) ticket.fieldEngineer = fieldEngineer;
-
-    if (status === 'RESOLVED_CLOSED') {
-      ticket.resolvedAt = new Date();
-    }
-
-    ticket.updatedBy = req.user?._id;
-    await ticket.save();
+    const ticket = await prisma.serviceTicket.update({
+      where: { id },
+      data: {
+        ...(status ? { status } : {}),
+        ...(resolutionNotes !== undefined ? { resolutionNotes } : {}),
+        ...(fieldEngineerName !== undefined ? { fieldEngineerName } : {}),
+        ...(status === 'RESOLVED_CLOSED' ? { resolvedAt: new Date() } : {}),
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
+    });
 
     await logAuditEvent({
       req,
       action: 'SERVICE_TICKET_UPDATED',
       module: 'after-sales',
-      entityId: ticket._id,
+      entityId: ticket.id,
       entityType: 'ServiceTicket',
-      notes: `Ticket ${ticket.ticketNumber} marked as ${status}`
+      notes: `Ticket ${ticket.ticketNumber} marked as ${ticket.status}`
     });
 
-    res.status(200).json({ success: true, message: 'Ticket updated successfully.', ticket });
+    res.status(200).json({
+      success: true,
+      message: 'All set! Service ticket updated.',
+      ticket: { ...ticket, _id: ticket.id }
+    });
   } catch (error) {
     next(error);
   }

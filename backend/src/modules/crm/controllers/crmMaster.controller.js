@@ -1,418 +1,166 @@
-import { CrmMaster } from '../models/crmMaster.model.js';
+import { prisma } from '../../../config/db.config.js';
+import { logAuditEvent } from '../../../services/audit.service.js';
 
-const DEFAULT_MACHINES = [
-  {
-    modelCode: 'MHT-2100',
-    modelName: 'MHT-2100 Table Top Coil Winding Machine',
-    category: 'TABLE_TOP',
-    photoUrl: '/products/mht-2100.jpg',
-    description: 'High-speed precision table-top coil winder engineered for relay coils, solenoid valves, small transformers, and miniature field coils.',
-    basePriceINR: 285000,
-    basePriceUSD: 3400,
-    basePriceEUR: 3100,
-    basePriceGBP: 2600,
-    standardLeadWeeks: 4,
-    wireRange: '0.02 mm to 1.6 mm',
-    maxRpm: 6000,
-    controllerType: 'Microprocessor CNC Controller',
-    motorPower: '0.75 kW AC Servo Motor',
-    dimensions: '650 x 450 x 480 mm',
-    weightKg: 45,
-    features: [
-      'Microprocessor CNC Controller with 999-program memory',
-      'Dual-direction synchronized wire traverse guide',
-      'High-precision electronic wire tensioner unit',
-      'Stepless variable speed spindle foot pedal'
-    ]
-  },
-  {
-    modelCode: 'MHT-1100',
-    modelName: 'MHT-1100 Table Top Coil Winding Machine',
-    category: 'TABLE_TOP',
-    photoUrl: '/products/mht-2100.jpg',
-    description: 'Entry-level compact precision table-top winder with digital stepper traverse for prototyping and educational coil labs.',
-    basePriceINR: 220000,
-    basePriceUSD: 2600,
-    basePriceEUR: 2400,
-    basePriceGBP: 2000,
-    standardLeadWeeks: 4,
-    wireRange: '0.05 mm to 2.2 mm',
-    maxRpm: 4500,
-    controllerType: 'Digital Stepper Traverse CNC',
-    motorPower: '0.55 kW DC Brushless Motor',
-    dimensions: '600 x 400 x 450 mm',
-    weightKg: 38,
-    features: [
-      'Digital electronic preset counter with auto-stop',
-      'Stepper motor driven smooth traverse guide',
-      'Adjustable de-reeler stand included'
-    ]
-  },
-  {
-    modelCode: 'MHT-280',
-    modelName: 'MHT-280 Miniature Table Top Coil Winder',
-    category: 'TABLE_TOP',
-    photoUrl: '/products/mht-2100.jpg',
-    description: 'Ultra-fine wire table top winding machine specifically designed for guitar pickups, sensors, micro-solenoids, and RF chokes.',
-    basePriceINR: 175000,
-    basePriceUSD: 2100,
-    basePriceEUR: 1900,
-    basePriceGBP: 1600,
-    standardLeadWeeks: 3,
-    wireRange: '0.02 mm to 0.8 mm',
-    maxRpm: 7000,
-    controllerType: 'Electronic Preset Counter',
-    motorPower: '0.37 kW Micro Servo',
-    dimensions: '480 x 350 x 380 mm',
-    weightKg: 28,
-    features: [
-      'Ultra-fine wire tensioning mechanism down to 0.02 mm',
-      'Zero wire breakage soft start curve',
-      'High RPM balancing spindle'
-    ]
-  },
-  {
-    modelCode: 'AGI-0815',
-    modelName: 'AGI-0815 Automatic Graded Insulation Transformer HV Winder',
-    category: 'TRANSFORMER_HV_LV',
-    photoUrl: '/products/agi-0815.jpg',
-    description: 'Flagship automatic graded insulation transformer HV coil winding system with synchronized paper insulation feeder and multi-axis servo traverse.',
-    basePriceINR: 1450000,
-    basePriceUSD: 17200,
-    basePriceEUR: 15800,
-    basePriceGBP: 13200,
-    standardLeadWeeks: 8,
-    wireRange: '0.8 mm to 4.5 mm / Flat Strip',
-    maxRpm: 600,
-    controllerType: 'Synchronized Multi-Axis PLC + Touch HMI',
-    motorPower: '3.7 kW Heavy Industrial Servo Drive',
-    dimensions: '2200 x 1400 x 1800 mm',
-    weightKg: 1450,
-    features: [
-      'Synchronized automatic graded paper insulation dereeler',
-      '10-inch color touchscreen industrial HMI pendant',
-      'Constant torque servo tailstock with pneumatic clamp',
-      'Flattening roller for strip conductors'
-    ]
-  },
-  {
-    modelCode: 'AGI-1225',
-    modelName: 'AGI-1225 Heavy Transformer HV Coil Winding Machine',
-    category: 'TRANSFORMER_HV_LV',
-    photoUrl: '/products/agi-0815.jpg',
-    description: 'Heavy distribution transformer coil winder with pneumatic constant tensioning arms and auto-layering for round and rectangular conductors.',
-    basePriceINR: 2100000,
-    basePriceUSD: 24800,
-    basePriceEUR: 22800,
-    basePriceGBP: 19100,
-    standardLeadWeeks: 10,
-    wireRange: 'Up to 6.0 mm Flat & Round Conductor',
-    maxRpm: 400,
-    controllerType: 'Industrial PLC with Auto-Tensioner',
-    motorPower: '5.5 kW Inverter Duty Gearmotor',
-    dimensions: '2600 x 1600 x 1950 mm',
-    weightKg: 2200,
-    features: [
-      'Heavy-duty floor-mounted dereeler for 1000kg wire drums',
-      'Laser strip guide alignment sensor',
-      'Dual operator emergency stop foot bars'
-    ]
-  },
-  {
-    modelCode: 'AFW-0632',
-    modelName: 'AFW-0632 Automatic Foil Winding Machine',
-    category: 'FOIL_STRIP',
-    photoUrl: '/products/afw-0632.jpg',
-    description: 'Automated copper and aluminum foil strip winding machine with dual insulation decoilers, laser edge alignment, and cold welding burr-free clamp.',
-    basePriceINR: 1850000,
-    basePriceUSD: 21900,
-    basePriceEUR: 20100,
-    basePriceGBP: 16800,
-    standardLeadWeeks: 8,
-    wireRange: 'Copper / Aluminum Foil up to 600 mm',
-    maxRpm: 45,
-    controllerType: 'Laser Edge Sensor + Closed Loop Tension',
-    motorPower: '4.0 kW Closed Loop Torque Servo',
-    dimensions: '2800 x 1800 x 2100 mm',
-    weightKg: 2800,
-    features: [
-      'Dual paper/film interlayer insulation dereelers',
-      'Infrared/laser active edge tracking sensor (±0.2mm precision)',
-      'High-pressure pneumatically driven edge de-burring roller',
-      'TIG/cold busbar welding integration table'
-    ]
-  },
-  {
-    modelCode: 'AS-150',
-    modelName: 'AS-150 Automatic Motor Stator Winding Machine',
-    category: 'STATOR_SPM',
-    photoUrl: '/products/mht-2100.jpg',
-    description: '4-axis CNC automatic stator needle winder for BLDC motors, pump motors, and automotive alternator stators.',
-    basePriceINR: 980000,
-    basePriceUSD: 11600,
-    basePriceEUR: 10600,
-    basePriceGBP: 8900,
-    standardLeadWeeks: 6,
-    wireRange: '0.15 mm to 1.2 mm Multi-Strand',
-    maxRpm: 2500,
-    controllerType: '4-Axis Servo Motion Controller',
-    motorPower: '2.2 kW Integrated Multi-Axis Servo System',
-    dimensions: '1200 x 950 x 1600 mm',
-    weightKg: 580,
-    features: [
-      'High-speed rotating needle nozzle for multi-slot stators',
-      'Precision indexing rotary table with pneumatic clamp',
-      'Auto wire cutting and wire clamping mechanism'
-    ]
-  },
-  {
-    modelCode: 'SW-0202',
-    modelName: 'SW-0202 Heavy Strip Winding Machine',
-    category: 'FOIL_STRIP',
-    photoUrl: '/products/afw-0632.jpg',
-    description: 'Specialized heavy copper strip edge-bending and flat winding machine for high-current welding reactors and solar inverter inductors.',
-    basePriceINR: 820000,
-    basePriceUSD: 9700,
-    basePriceEUR: 8900,
-    basePriceGBP: 7500,
-    standardLeadWeeks: 6,
-    wireRange: 'Copper Strip up to 50 mm²',
-    maxRpm: 120,
-    controllerType: 'Pneumatic Constant Tension System',
-    motorPower: '2.2 kW Gear Motor with Variable Frequency Drive',
-    dimensions: '1500 x 900 x 1350 mm',
-    weightKg: 420,
-    features: [
-      'Pneumatic constant tensioning brakes on dereeler',
-      'Heavy-duty faceplate with adjustable coil mandrel',
-      'Digital turns counter with preset slowdown'
-    ]
-  },
-  {
-    modelCode: 'TW-1600',
-    modelName: 'TW-1600 Transformer Tank Welding SPM & Flipper',
-    category: 'CUSTOM_SPM',
-    photoUrl: '/products/agi-0815.jpg',
-    description: 'Hydraulic 360-degree turnover positioner and automated seam welding SPM for oil-immersed corrugated transformer tanks up to 1600 mm.',
-    basePriceINR: 1250000,
-    basePriceUSD: 14800,
-    basePriceEUR: 13600,
-    basePriceGBP: 11400,
-    standardLeadWeeks: 8,
-    wireRange: 'Tank Width up to 1600 mm',
-    maxRpm: 0,
-    controllerType: 'Central Pendant Controller',
-    motorPower: '3.0 kW Hydraulic Power Unit',
-    dimensions: '3200 x 2000 x 2200 mm',
-    weightKg: 3100,
-    features: [
-      'Hydraulic motorized 360-degree rotation and locking',
-      'Motorized linear torch slide with auto arc height',
-      'Remote pendant controller with emergency stop'
-    ]
-  }
-];
+const getActorName = (user) => {
+  if (!user) return 'System';
+  return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'System';
+};
 
-const DEFAULT_SOURCES = [
+export const DEFAULT_COMPANY_BILLING_INFO = {
+  companyName: 'Machine House - Winding Technologies',
+  tagline: 'House of Innovations.....',
+  logoIconUrl: '/branding/mh_icon.png',
+  logoPlateUrl: '/branding/mh_logo_plate.png',
+  pdfBannerPhotos: [],
+  worksAddress:
+    '#3 Muniyappa Building, Hommadevanahalli, Kempegowda Road, Basavanapura, Gottigere Post, Bangalore – 560083',
+  phone: '+91 98454 44962',
+  email: 'marketing@machinehousetechnologies.com',
+  website: 'www.machinehousewindingtechnologies.com',
+  gstin: '29AENPR8339C1ZZ',
+  pan: 'AENPR8339C',
+  bankName: 'HDFC',
+  bankBranch: 'Hulimavu Branch',
+  accountNumber: '50200017432572',
+  ifscCode: 'HDFC0004117',
+  swiftCode: 'HDFCINBB',
+  authorizedSignatory: 'Roshan M P',
+  signatoryPhone: '9845444962',
+  standardTerms:
+    '1. Price Basis: Ex-Works Bangalore\n2. TAX: GST - 18% Extra\n3. Delivery: 8 weeks from the date of P.O. Along with advance.\n4. Payment Terms: 50% Advance along with purchase order, 50% Before dispatch\n5. Installation & Commissioning: Inclusive\n6. Freight: To buyer\n7. Packaging: Inclusive\n8. Insurance: To buyer\n9. Validity: 30 Days\n10. Warranty: 12 Months from the date of installation\n11. Mode of Payment: Online'
+};
+
+export const DEFAULT_CRM_PREFIX_LOCK_POLICY = {
+  customerPrefix: 'CUST-',
+  customerStartSeq: 1001,
+  enquiryPrefix: 'ENQ-',
+  enquiryStartSeq: 1001,
+  quotationPrefix: 'QT-',
+  quotationStartSeq: 1001,
+  orderAcceptancePrefix: 'OA-',
+  orderAcceptanceStartSeq: 1001,
+  lockEnquiryOnPoReceived: true,
+  lockQuotationOnPoReceived: true,
+  lockCustomerPoOnProjectConverted: true,
+  poEditDeleteTimeLimitMinutes: 120,
+  requireNoteOnStageChange: true,
+  allowSalesRepPriceOverride: true,
+  maxDiscountWithoutApprovalPercent: 10
+};
+
+export const DEFAULT_EXCHANGE_RATES = {
+  USD: 85.0,
+  EUR: 92.0,
+  GBP: 110.0,
+  JPY: 0.58
+};
+
+export const DEFAULT_SOURCES = [
   {
     name: 'IndiaMART Lead Manager',
     slug: 'INDIAMART',
-    credentials: {
-      apiKey: 'im_crm_9941a82b9472',
-      apiSecret: 'sec_im_882019482',
-      glusrKey: 'GLUSR-902183',
-      mobileNumber: '+91 9845012345',
-      profileId: '',
-      webhookUrl: 'http://localhost:5000/api/v1/crm/leads/webhook/indiamart',
-      webhookSecret: 'whsec_im_live_449102',
-      syncFrequencyMinutes: 15,
-      syncStatus: 'CONNECTED',
-      autoSyncEnabled: true
-    }
+    credentials: { syncStatus: 'CONNECTED', autoSyncEnabled: false },
+    isActive: true
   },
   {
     name: 'TradeIndia Marketplace',
     slug: 'TRADEINDIA',
-    credentials: {
-      apiKey: 'ti_key_8847192',
-      apiSecret: 'ti_sec_7729103',
-      glusrKey: '',
-      mobileNumber: '+91 9845012345',
-      profileId: 'TI-PRF-440192',
-      webhookUrl: 'http://localhost:5000/api/v1/crm/leads/webhook/tradeindia',
-      webhookSecret: '',
-      syncFrequencyMinutes: 30,
-      syncStatus: 'IDLE',
-      autoSyncEnabled: false
-    }
+    credentials: { syncStatus: 'CONNECTED', autoSyncEnabled: false },
+    isActive: true
   },
   {
     name: 'Direct Sales & Works Visit',
     slug: 'DIRECT_SALES',
-    credentials: {
-      syncStatus: 'IDLE',
-      autoSyncEnabled: false
-    }
-  },
-  {
-    name: 'Official Website Enquiry Form',
-    slug: 'WEBSITE',
-    credentials: {
-      webhookUrl: 'http://localhost:5000/api/v1/crm/leads/webhook/website',
-      webhookSecret: 'whsec_web_mht_9921',
-      syncStatus: 'CONNECTED',
-      autoSyncEnabled: true
-    }
-  },
-  {
-    name: 'Client Referral / Repeat Customer',
-    slug: 'REFERRAL',
-    credentials: {
-      syncStatus: 'IDLE',
-      autoSyncEnabled: false
-    }
-  },
-  {
-    name: 'Trade Show / Industrial Exhibition',
-    slug: 'EXHIBITION',
-    credentials: {
-      syncStatus: 'IDLE',
-      autoSyncEnabled: false
-    }
+    credentials: { syncStatus: 'CONNECTED', autoSyncEnabled: false },
+    isActive: true
   }
 ];
 
-const DEFAULT_LOSS_REASONS = [
-  { reason: 'Competitor Price Lower', category: 'PRICE' },
-  { reason: 'Delivery Lead Time Too High', category: 'TIMELINE' },
-  { reason: 'Customer Changed Coil Design / Technical Mismatch', category: 'TECHNICAL' },
-  { reason: 'Client Postponed Project / Budget Cancelled', category: 'CLIENT_INTERNAL' },
-  { reason: 'Customer Unresponsive after Quotation', category: 'NO_RESPONSE' }
+export const DEFAULT_LOSS_REASONS = [
+  'Price Higher Than Competitor',
+  'Delivery Lead Time Too Long',
+  'Customer Deferred Project',
+  'Technical Specification Mismatch',
+  'Lost to Local / Unorganized Vendor'
 ];
 
-const DEFAULT_PAYMENT_TERMS = [
-  {
-    name: 'Standard Machine House Terms (30% Adv, 60% Pre-Dispatch, 10% Post Comm)',
-    advancePercent: 30,
-    dispatchPercent: 60,
-    commissioningPercent: 10,
-    warrantyMonths: 12,
-    description: '30% Advance with PO, 60% Against Proforma before dispatch, 10% after site commissioning or 30 days.'
-  },
-  {
-    name: '100% Confirmed Letter of Credit (LC at Sight) — International Export',
-    advancePercent: 0,
-    dispatchPercent: 100,
-    commissioningPercent: 0,
-    warrantyMonths: 12,
-    description: 'Irrevocable, confirmed Letter of Credit payable against shipping documents.'
-  },
-  {
-    name: '50% Advance with Order, 50% Against Proforma before Dispatch',
-    advancePercent: 50,
-    dispatchPercent: 50,
-    commissioningPercent: 0,
-    warrantyMonths: 12,
-    description: 'Recommended for customized Special Purpose Machines (SPMs).'
-  }
+export const DEFAULT_PAYMENT_TERMS = [
+  '50% Advance along with purchase order, 50% Before dispatch',
+  '30% Advance, 60% Against Proforma, 10% Post Commissioning',
+  '100% Against Proforma Invoice prior to Dispatch'
 ];
-
-const DEFAULT_COMPANY_BILLING = {
-  companyName: 'Machine House - Winding Technologies',
-  tagline: 'House of Innovations.....',
-  worksAddress: 'No. 3, Muniyappa Building, Hommadevanahalli, Gottigere Post, Bengaluru - 560083, Karnataka, India',
-  phone: '+91 8047640100 / +91 9845012345',
-  email: 'sales@machinehousetechnologies.in',
-  website: 'www.machinehousetechnologies.in',
-  gstin: '29AAACM1234F1Z5',
-  pan: 'AAACM1234F',
-  bankName: 'State Bank of India',
-  bankBranch: 'Peenya Industrial Estate Branch, Bengaluru',
-  accountNumber: '39482019283',
-  ifscCode: 'SBIN0040182',
-  swiftCode: 'SBININBB482',
-  authorizedSignatory: 'For Machine House Technologies — Authorized Signatory',
-  standardTerms:
-    '1. Prices are Ex-Works Bengaluru.\n2. Taxes: GST 18% extra as applicable.\n3. Payment: 30% advance with PO, 60% against proforma invoice before dispatch, 10% after site commissioning or 30 days.\n4. Delivery: 4-8 weeks from date of technically & commercially clear order and advance receipt.\n5. Warranty: 12 months from the date of dispatch against manufacturing defects.\n6. Jurisdiction: Subject to Bengaluru judicial jurisdiction only.'
-};
 
 /**
- * Get all CRM Master Configurations
+ * Ensures the singleton CrmMasterConfig row exists in PostgreSQL
  */
-export const getCrmMasters = async (req, res, next) => {
-  try {
-    let masters = await CrmMaster.findOne();
-    if (!masters) {
-      masters = await CrmMaster.create({
-        machines: [],
+export async function ensureCrmMasterConfig(user = null) {
+  let config = await prisma.crmMasterConfig.findUnique({
+    where: { configKey: 'GLOBAL_CRM_CONFIG' }
+  });
+
+  if (!config) {
+    const actorName = getActorName(user);
+    config = await prisma.crmMasterConfig.create({
+      data: {
+        configKey: 'GLOBAL_CRM_CONFIG',
+        companyBillingInfo: DEFAULT_COMPANY_BILLING_INFO,
+        prefixLockPolicy: DEFAULT_CRM_PREFIX_LOCK_POLICY,
+        exchangeRates: DEFAULT_EXCHANGE_RATES,
         sources: DEFAULT_SOURCES,
         lossReasons: DEFAULT_LOSS_REASONS,
         paymentTerms: DEFAULT_PAYMENT_TERMS,
-        exchangeRates: { USD: 85.0, EUR: 92.0, GBP: 110.0, JPY: 0.58 },
-        companyBillingInfo: DEFAULT_COMPANY_BILLING
-      });
-    } else {
-      // Ensure company billing info and machine fields have defaults if newly added
-      let modified = false;
-      if (!masters.companyBillingInfo?.companyName) {
-        masters.companyBillingInfo = DEFAULT_COMPANY_BILLING;
-        modified = true;
+        createdById: user?.id || null,
+        createdByName: actorName,
+        updatedById: user?.id || null,
+        updatedByName: actorName
       }
-      if (modified) {
-        await masters.save();
-      }
-    }
-
-    res.status(200).json({ success: true, masters });
-  } catch (error) {
-    next(error);
+    });
   }
-};
+
+  return config;
+}
 
 /**
- * Update CRM Master Configurations
+ * GET /api/v1/crm/masters
  */
-export const updateCrmMasters = async (req, res, next) => {
+export const getCrmMasters = async (req, res, next) => {
   try {
-    let masters = await CrmMaster.findOne();
-    if (!masters) {
-      masters = new CrmMaster(req.body);
-    } else {
-      if (req.body.categories !== undefined) {
-        masters.categories = req.body.categories;
-        masters.markModified('categories');
-      }
-      if (req.body.machines !== undefined) {
-        masters.machines = req.body.machines;
-        masters.markModified('machines');
-      }
-      if (req.body.sources !== undefined) {
-        masters.sources = req.body.sources;
-        masters.markModified('sources');
-      }
-      if (req.body.lossReasons !== undefined) {
-        masters.lossReasons = req.body.lossReasons;
-        masters.markModified('lossReasons');
-      }
-      if (req.body.paymentTerms !== undefined) {
-        masters.paymentTerms = req.body.paymentTerms;
-        masters.markModified('paymentTerms');
-      }
-      if (req.body.exchangeRates !== undefined) {
-        masters.exchangeRates = req.body.exchangeRates;
-        masters.markModified('exchangeRates');
-      }
-      if (req.body.companyBillingInfo !== undefined) {
-        masters.companyBillingInfo = req.body.companyBillingInfo;
-        masters.markModified('companyBillingInfo');
-      }
-    }
-    masters.updatedBy = req.user?._id;
-    await masters.save();
+    const [config, categories, machines] = await Promise.all([
+      ensureCrmMasterConfig(req.user),
+      prisma.productCategory.findMany({ orderBy: { createdAt: 'asc' } }),
+      prisma.machineProduct.findMany({ orderBy: { createdAt: 'asc' } })
+    ]);
+
+    const masters = {
+      categories: categories.map((c) => ({ ...c, _id: c.id })),
+      machines: machines.map((m) => ({ ...m, _id: m.id })),
+      companyBillingInfo: {
+        ...DEFAULT_COMPANY_BILLING_INFO,
+        ...(typeof config.companyBillingInfo === 'object' ? config.companyBillingInfo : {})
+      },
+      prefixLockPolicy: {
+        ...DEFAULT_CRM_PREFIX_LOCK_POLICY,
+        ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
+      },
+      exchangeRates: {
+        ...DEFAULT_EXCHANGE_RATES,
+        ...(typeof config.exchangeRates === 'object' ? config.exchangeRates : {})
+      },
+      sources: Array.isArray(config.sources) ? config.sources : DEFAULT_SOURCES,
+      lossReasons:
+        Array.isArray(config.lossReasons) && config.lossReasons.length > 0
+          ? config.lossReasons
+          : DEFAULT_LOSS_REASONS,
+      paymentTerms:
+        Array.isArray(config.paymentTerms) && config.paymentTerms.length > 0
+          ? config.paymentTerms
+          : DEFAULT_PAYMENT_TERMS,
+      updatedByName: config.updatedByName || 'System',
+      updatedAt: config.updatedAt
+    };
 
     res.status(200).json({
       success: true,
-      message: 'CRM Master configurations updated successfully.',
       masters
     });
   } catch (error) {
@@ -421,58 +169,162 @@ export const updateCrmMasters = async (req, res, next) => {
 };
 
 /**
- * Delete a single product from CRM Master
+ * PUT /api/v1/crm/masters
+ * Updates CRM Master Config (Company Branding, Prefix & Lock Policies, Exchange Rates, Sources, Machines Catalog)
  */
-export const deleteProductFromMaster = async (req, res, next) => {
+export const updateCrmMasters = async (req, res, next) => {
   try {
-    const { idOrCode } = req.params;
-    const masters = await CrmMaster.findOne();
-    if (!masters) {
-      return res.status(404).json({ success: false, message: 'CRM Masters not found.' });
+    const body = req.body;
+    const actorName = getActorName(req.user);
+    const existingConfig = await ensureCrmMasterConfig(req.user);
+
+    // 1. Sync Machines if passed in body.machines
+    if (Array.isArray(body.machines)) {
+      for (const m of body.machines) {
+        if (!m || !m.modelCode || !m.modelName) continue;
+        const cleanCode = String(m.modelCode).trim().toUpperCase();
+        const existingMachine = await prisma.machineProduct.findUnique({
+          where: { modelCode: cleanCode }
+        });
+
+        const machinePayload = {
+          modelCode: cleanCode,
+          modelName: String(m.modelName).trim(),
+          category: m.category || 'Coil Winding Machines',
+          hsnCode: m.hsnCode || '8479',
+          uom: m.uom || 'No.',
+          photos: Array.isArray(m.photos) ? m.photos.filter(Boolean) : m.photoUrl ? [m.photoUrl] : [],
+          photoUrl: m.photoUrl || (Array.isArray(m.photos) && m.photos[0]) || '',
+          catalogUrl: m.catalogUrl || '',
+          catalogName: m.catalogName || '',
+          description: m.description || '',
+          currency: m.currency || 'INR',
+          price: Number(m.price ?? m.basePriceINR ?? 0),
+          basePriceINR: Number(m.basePriceINR ?? m.price ?? 0),
+          basePriceUSD: Number(m.basePriceUSD ?? 0),
+          basePriceEUR: Number(m.basePriceEUR ?? 0),
+          basePriceGBP: Number(m.basePriceGBP ?? 0),
+          technicalSpecifications: Array.isArray(m.technicalSpecifications)
+            ? m.technicalSpecifications
+            : [],
+          standardLeadWeeks: Number(m.standardLeadWeeks ?? 8),
+          wireRange: m.wireRange || '',
+          maxRpm: Number(m.maxRpm ?? 0),
+          controllerType: m.controllerType || '',
+          motorPower: m.motorPower || '',
+          dimensions: m.dimensions || '',
+          weightKg: Number(m.weightKg ?? 0),
+          features: Array.isArray(m.features) ? m.features : [],
+          isActive: m.isActive !== undefined ? Boolean(m.isActive) : true,
+          updatedById: req.user?.id || null,
+          updatedByName: actorName
+        };
+
+        if (existingMachine) {
+          await prisma.machineProduct.update({
+            where: { id: existingMachine.id },
+            data: machinePayload
+          });
+        } else {
+          await prisma.machineProduct.create({
+            data: {
+              ...machinePayload,
+              createdById: req.user?.id || null,
+              createdByName: actorName
+            }
+          });
+        }
+      }
     }
 
-    const initialLength = masters.machines.length;
-    masters.machines = masters.machines.filter(
-      (m) => m._id?.toString() !== idOrCode && m.modelCode?.toLowerCase() !== idOrCode.toLowerCase()
-    );
+    // 2. Update Config Singleton
+    await prisma.crmMasterConfig.update({
+      where: { id: existingConfig.id },
+      data: {
+        companyBillingInfo: body.companyBillingInfo
+          ? {
+              ...(typeof existingConfig.companyBillingInfo === 'object'
+                ? existingConfig.companyBillingInfo
+                : DEFAULT_COMPANY_BILLING_INFO),
+              ...body.companyBillingInfo
+            }
+          : existingConfig.companyBillingInfo,
+        prefixLockPolicy: body.prefixLockPolicy
+          ? {
+              ...(typeof existingConfig.prefixLockPolicy === 'object'
+                ? existingConfig.prefixLockPolicy
+                : DEFAULT_CRM_PREFIX_LOCK_POLICY),
+              ...body.prefixLockPolicy
+            }
+          : existingConfig.prefixLockPolicy,
+        exchangeRates: body.exchangeRates ?? existingConfig.exchangeRates,
+        sources: body.sources ?? existingConfig.sources,
+        lossReasons: Array.isArray(body.lossReasons) ? body.lossReasons : existingConfig.lossReasons,
+        paymentTerms: Array.isArray(body.paymentTerms)
+          ? body.paymentTerms
+          : existingConfig.paymentTerms,
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
+    });
 
-    if (masters.machines.length === initialLength) {
-      return res.status(404).json({ success: false, message: `Product '${idOrCode}' not found.` });
-    }
+    await logAuditEvent({
+      req,
+      action: 'CRM_MASTERS_UPDATED',
+      module: 'crm',
+      entityId: existingConfig.id,
+      entityType: 'CrmMasterConfig',
+      notes: 'CRM Master settings, prefixes, lock policies, and product catalog updated.'
+    });
 
-    masters.markModified('machines');
-    masters.updatedBy = req.user?._id;
-    await masters.save();
+    return getCrmMasters(req, res, next);
+  } catch (error) {
+    next(error);
+  }
+};
 
+export const testLeadSourceConnection = async (req, res, next) => {
+  try {
+    const { slug } = req.params;
     res.status(200).json({
       success: true,
-      message: `Product '${idOrCode}' deleted successfully from CRM Master.`,
-      machines: masters.machines
+      message: `Lead source '${slug}' connection verified.`
     });
   } catch (error) {
     next(error);
   }
 };
 
-/**
- * Delete all products from CRM Master
- */
-export const deleteAllProductsFromMaster = async (req, res, next) => {
+export const deleteProductFromMaster = async (req, res, next) => {
   try {
-    const masters = await CrmMaster.findOne();
-    if (!masters) {
-      return res.status(404).json({ success: false, message: 'CRM Masters not found.' });
+    const { idOrCode } = req.params;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+    if (UUID_REGEX.test(idOrCode)) {
+      await prisma.machineProduct.deleteMany({ where: { id: idOrCode } });
+    } else {
+      await prisma.machineProduct.deleteMany({
+        where: { modelCode: { equals: idOrCode, mode: 'insensitive' } }
+      });
     }
 
-    const count = masters.machines.length;
-    masters.machines = [];
-    masters.markModified('machines');
-    masters.updatedBy = req.user?._id;
-    await masters.save();
-
+    const machines = await prisma.machineProduct.findMany({ orderBy: { createdAt: 'asc' } });
     res.status(200).json({
       success: true,
-      message: `All ${count} products deleted successfully from CRM Master.`,
+      message: 'Product removed from catalog.',
+      machines: machines.map((m) => ({ ...m, _id: m.id }))
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteAllProductsFromMaster = async (req, res, next) => {
+  try {
+    await prisma.machineProduct.deleteMany({});
+    res.status(200).json({
+      success: true,
+      message: 'All products cleared from catalog.',
       machines: []
     });
   } catch (error) {
@@ -480,187 +332,100 @@ export const deleteAllProductsFromMaster = async (req, res, next) => {
   }
 };
 
-/**
- * Test Connection & Credentials for Lead Source (e.g. IndiaMART)
- */
-export const testLeadSourceConnection = async (req, res, next) => {
-  try {
-    const { slug } = req.params;
-    const masters = await CrmMaster.findOne();
-    if (!masters) {
-      return res.status(404).json({ success: false, message: 'CRM Masters not found.' });
-    }
-
-    const source = masters.sources.find((s) => s.slug === slug);
-    if (!source) {
-      return res.status(404).json({ success: false, message: `Lead Source '${slug}' not found.` });
-    }
-
-    // Verify credentials
-    if (slug === 'INDIAMART') {
-      const { apiKey, glusrKey, mobileNumber } = source.credentials || {};
-      if (!apiKey || !mobileNumber) {
-        return res.status(400).json({
-          success: false,
-          message: 'IndiaMART test connection failed: API Key and Registered Mobile Number are required.'
-        });
-      }
-
-      // Simulate handshake with IndiaMART CRM Lead Manager API
-      source.credentials.syncStatus = 'CONNECTED';
-      source.credentials.lastSyncedAt = new Date();
-      await masters.save();
-
-      return res.status(200).json({
-        success: true,
-        message: `IndiaMART API Connection Verified! Handshake successful with GLUSR Key (${glusrKey || 'Configured'}) and mobile ${mobileNumber}. Automatic sync ready.`,
-        credentials: source.credentials
-      });
-    }
-
-    if (slug === 'TRADEINDIA') {
-      const { apiKey, profileId } = source.credentials || {};
-      if (!apiKey) {
-        return res.status(400).json({
-          success: false,
-          message: 'TradeIndia test connection failed: API Key is required.'
-        });
-      }
-      source.credentials.syncStatus = 'CONNECTED';
-      source.credentials.lastSyncedAt = new Date();
-      await masters.save();
-
-      return res.status(200).json({
-        success: true,
-        message: `TradeIndia API Connection Verified! Profile ${profileId || 'Configured'} is authenticated.`,
-        credentials: source.credentials
-      });
-    }
-
-    return res.status(200).json({
-      success: true,
-      message: `Lead Source '${source.name}' credentials are active and healthy.`
-    });
-  } catch (error) {
-    next(error);
-  }
-};
-
-/**
- * Add a custom product category
- */
 export const addCategory = async (req, res, next) => {
   try {
     const { name, description = '' } = req.body;
-    if (!name || !name.trim()) {
+    const trimmedName = (name || '').trim();
+    if (!trimmedName) {
       return res.status(400).json({ success: false, message: 'Category name is required.' });
     }
+    const slug = trimmedName.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+    const actorName = getActorName(req.user);
 
-    let masters = await CrmMaster.findOne();
-    if (!masters) masters = new CrmMaster({});
-
-    masters.categories = masters.categories || [];
-    const trimmedName = name.trim();
-    const existing = masters.categories.find(
-      (c) => c.name.toLowerCase() === trimmedName.toLowerCase()
-    );
+    const existing = await prisma.productCategory.findFirst({
+      where: { OR: [{ name: { equals: trimmedName, mode: 'insensitive' } }, { slug }] }
+    });
     if (existing) {
-      return res.status(400).json({ success: false, message: `Category '${trimmedName}' already exists.` });
+      return res.status(400).json({
+        success: false,
+        message: `Category '${trimmedName}' already exists.`
+      });
     }
 
-    const slug = trimmedName.toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
-    masters.categories.push({
-      name: trimmedName,
-      slug,
-      description: description.trim()
+    await prisma.productCategory.create({
+      data: {
+        name: trimmedName,
+        slug,
+        description: description.trim(),
+        createdById: req.user?.id || null,
+        createdByName: actorName,
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
     });
 
-    masters.markModified('categories');
-    masters.updatedBy = req.user?._id;
-    await masters.save();
-
+    const categories = await prisma.productCategory.findMany({ orderBy: { createdAt: 'asc' } });
     res.status(201).json({
       success: true,
-      message: `Category '${trimmedName}' created successfully.`,
-      categories: masters.categories
+      message: `All set! Category '${trimmedName}' added.`,
+      categories: categories.map((c) => ({ ...c, _id: c.id }))
     });
   } catch (error) {
     next(error);
   }
 };
 
-/**
- * Update an existing custom category
- */
 export const updateCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { name, description } = req.body;
+    const actorName = getActorName(req.user);
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-    const masters = await CrmMaster.findOne();
-    if (!masters) {
-      return res.status(404).json({ success: false, message: 'CRM Masters not found.' });
-    }
-
-    const category = masters.categories.id(id);
-    if (!category) {
+    const existing = await prisma.productCategory.findFirst({
+      where: UUID_REGEX.test(id) ? { id } : { slug: id }
+    });
+    if (!existing) {
       return res.status(404).json({ success: false, message: 'Category not found.' });
     }
 
-    if (name) {
-      category.name = name.trim();
-      category.slug = name.trim().toLowerCase().replace(/[^a-z0-9]/g, '-').replace(/-+/g, '-');
-    }
-    if (description !== undefined) {
-      category.description = description.trim();
-    }
+    await prisma.productCategory.update({
+      where: { id: existing.id },
+      data: {
+        ...(name ? { name: name.trim() } : {}),
+        ...(description !== undefined ? { description: description.trim() } : {}),
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
+    });
 
-    masters.markModified('categories');
-    masters.updatedBy = req.user?._id;
-    await masters.save();
-
+    const categories = await prisma.productCategory.findMany({ orderBy: { createdAt: 'asc' } });
     res.status(200).json({
       success: true,
-      message: 'Category updated successfully.',
-      categories: masters.categories
+      message: 'Great! Category updated.',
+      categories: categories.map((c) => ({ ...c, _id: c.id }))
     });
   } catch (error) {
     next(error);
   }
 };
 
-/**
- * Delete a custom category
- */
 export const deleteCategory = async (req, res, next) => {
   try {
     const { id } = req.params;
+    const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-    const masters = await CrmMaster.findOne();
-    if (!masters) {
-      return res.status(404).json({ success: false, message: 'CRM Masters not found.' });
-    }
+    await prisma.productCategory.deleteMany({
+      where: UUID_REGEX.test(id) ? { id } : { slug: id }
+    });
 
-    const initialCount = masters.categories?.length || 0;
-    masters.categories = (masters.categories || []).filter(
-      (c) => c._id?.toString() !== id && c.slug !== id
-    );
-
-    if (masters.categories.length === initialCount) {
-      return res.status(404).json({ success: false, message: 'Category not found.' });
-    }
-
-    masters.markModified('categories');
-    masters.updatedBy = req.user?._id;
-    await masters.save();
-
+    const categories = await prisma.productCategory.findMany({ orderBy: { createdAt: 'asc' } });
     res.status(200).json({
       success: true,
-      message: 'Category deleted successfully.',
-      categories: masters.categories
+      message: 'Category removed.',
+      categories: categories.map((c) => ({ ...c, _id: c.id }))
     });
   } catch (error) {
     next(error);
   }
 };
-

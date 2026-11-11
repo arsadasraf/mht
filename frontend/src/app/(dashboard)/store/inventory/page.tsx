@@ -1,8 +1,8 @@
 'use client';
 
 import React from 'react';
-import InventoryTab from '../../../../modules/store/components/InventoryTab';
+import StoreInventoryTab from '../../../../modules/store/components/StoreInventoryTab';
 
 export default function InventoryPage() {
-  return <InventoryTab />;
+  return <StoreInventoryTab initialSubTab="rm-bo" />;
 }

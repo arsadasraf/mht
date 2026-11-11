@@ -10,6 +10,12 @@ import {
 } from '../controllers/customer.controller.js';
 import { authenticate } from '../../../middleware/auth.middleware.js';
 import { authorizeRouteAccess } from '../../../middleware/rbac.middleware.js';
+import { validateRequest } from '../../../middleware/validate.middleware.js';
+import {
+  createCustomerSchema,
+  updateCustomerSchema,
+  bulkImportCustomersSchema
+} from '../validators/customer.validator.js';
 
 const router = Router();
 
@@ -17,11 +23,11 @@ const router = Router();
 router.use(authenticate, authorizeRouteAccess('/crm/masters'));
 
 router.get('/', getCustomers);
-router.post('/', createCustomer);
-router.post('/bulk-import', bulkImportCustomers);
+router.post('/', validateRequest(createCustomerSchema), createCustomer);
+router.post('/bulk-import', validateRequest(bulkImportCustomersSchema), bulkImportCustomers);
 router.delete('/', deleteAllCustomers);
 router.get('/:id', getCustomerById);
-router.put('/:id', updateCustomer);
+router.put('/:id', validateRequest(updateCustomerSchema), updateCustomer);
 router.delete('/:id', deleteCustomer);
 
 export default router;

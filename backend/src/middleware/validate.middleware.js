@@ -41,3 +41,6 @@ export const validateRequest = (schema) => {
     }
   };
 };
+
+export const validate = validateRequest;
+

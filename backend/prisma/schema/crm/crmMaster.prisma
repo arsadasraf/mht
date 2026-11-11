@@ -1,0 +1,99 @@
+model ProductCategory {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @unique
+  slug          String   @unique
+  description   String   @default("")
+  isActive      Boolean  @default(true)
+
+  // Universal Action Tracking
+  createdById   String?  @db.Uuid
+  createdBy     User?    @relation("ProductCategoryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByName String   @default("")
+
+  updatedById   String?  @db.Uuid
+  updatedBy     User?    @relation("ProductCategoryUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedByName String   @default("")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("crm_product_categories")
+}
+
+model MachineProduct {
+  id                      String   @id @default(uuid()) @db.Uuid
+  modelCode               String   @unique
+  modelName               String
+  category                String   @default("Coil Winding Machines")
+  hsnCode                 String   @default("8479")
+  uom                     String   @default("No.")
+  photos                  String[] @default([])
+  photoUrl                String   @default("")
+  catalogUrl              String   @default("")
+  catalogName             String   @default("")
+  description             String   @default("")
+
+  currency                String   @default("INR")
+  price                   Float    @default(0)
+  basePriceINR            Float    @default(0)
+  basePriceUSD            Float    @default(0)
+  basePriceEUR            Float    @default(0)
+  basePriceGBP            Float    @default(0)
+
+  technicalSpecifications Json     @default("[]")
+  standardLeadWeeks       Int      @default(8)
+  wireRange               String   @default("")
+  maxRpm                  Int      @default(0)
+  controllerType          String   @default("")
+  motorPower              String   @default("")
+  dimensions              String   @default("")
+  weightKg                Float    @default(0)
+  features                String[] @default([])
+  isActive                Boolean  @default(true)
+
+  // Universal Action Tracking
+  createdById             String?  @db.Uuid
+  createdBy               User?    @relation("MachineProductCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByName           String   @default("")
+
+  updatedById             String?  @db.Uuid
+  updatedBy               User?    @relation("MachineProductUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedByName           String   @default("")
+
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+
+  @@index([modelCode])
+  @@index([category])
+  @@map("crm_machine_products")
+}
+
+model CrmMasterConfig {
+  id                  String   @id @default(uuid()) @db.Uuid
+  configKey           String   @unique @default("GLOBAL_CRM_CONFIG")
+
+  // Company Branding & PDF Details (Logos, Photos, Bank Details, Signatory)
+  companyBillingInfo  Json
+  // Document Prefix Settings & Lock / Permission Policies for CRM
+  prefixLockPolicy    Json
+  // Exchange Rates, Sources, Loss Reasons, Payment Terms
+  exchangeRates       Json
+  sources             Json
+  lossReasons         String[] @default([])
+  paymentTerms        String[] @default([])
+
+  // Universal Action Tracking
+  createdById         String?  @db.Uuid
+  createdBy           User?    @relation("CrmConfigCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByName       String   @default("")
+
+  updatedById         String?  @db.Uuid
+  updatedBy           User?    @relation("CrmConfigUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedByName       String   @default("")
+
+  createdAt           DateTime @default(now())
+  updatedAt           DateTime @updatedAt
+
+  @@map("crm_master_configs")
+}
+

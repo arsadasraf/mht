@@ -1,0 +1,123 @@
+enum LeadPriority {
+  LOW
+  MEDIUM
+  HIGH
+  URGENT
+}
+
+enum LeadStage {
+  NEW
+  CONTACTED
+  TECHNICAL_REVIEW
+  QUOTE_PREPARED
+  QUOTATION_PREPARED
+  NEGOTIATION
+  WON
+  IN_PRODUCTION
+  DISPATCHED
+  LOST
+}
+
+model Lead {
+  id                  String              @id @default(uuid()) @db.Uuid
+  leadNumber          String              @unique
+  queryId             String?
+  source              String              @default("DIRECT_SALES")
+
+  customerName        String
+  companyName         String
+  contactPhone        String              @default("")
+  contactEmail        String              @default("")
+  city                String              @default("Bengaluru")
+  state               String              @default("Karnataka")
+  country             String              @default("India")
+  gstin               String              @default("")
+
+  machineModel        String              @default("MHT-2100")
+  machineRequirement  String              @default("")
+  products            Json                @default("[]")
+  estimatedValue      Json
+
+  priority            LeadPriority        @default(MEDIUM)
+  stage               LeadStage           @default(NEW)
+  status              String              @default("NEW")
+  lossReason          String              @default("")
+  notes               String              @default("")
+
+  isLocked            Boolean             @default(false)
+  convertedProjectId  String?
+  convertedAt         DateTime?
+
+  assignedToId        String?             @db.Uuid
+  assignedTo          User?               @relation("LeadAssignedTo", fields: [assignedToId], references: [id], onDelete: SetNull)
+
+  followUpNotes       LeadFollowUpNote[]
+  stageHistory        LeadStageHistory[]
+  quotations          Quotation[]         @relation("LeadQuotations")
+
+  // Universal Action Tracking
+  createdById         String?             @db.Uuid
+  createdBy           User?               @relation("LeadCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByName       String              @default("")
+
+  updatedById         String?             @db.Uuid
+  updatedBy           User?               @relation("LeadUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedByName       String              @default("")
+
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+
+  @@index([leadNumber])
+  @@index([stage])
+  @@index([source])
+  @@index([companyName])
+  @@map("crm_leads")
+}
+
+model LeadFollowUpNote {
+  id            String   @id @default(uuid()) @db.Uuid
+  leadId        String   @db.Uuid
+  lead          Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  stage         String   @default("NEW")
+  note          String
+  nextFollowUp  DateTime?
+
+  // Universal Action Tracking
+  createdById   String?  @db.Uuid
+  createdBy     User?    @relation("LeadFollowUpCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByName String   @default("")
+  updatedById   String?  @db.Uuid
+  updatedByName String   @default("")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([leadId, createdAt(sort: Desc)])
+  @@map("crm_lead_followup_notes")
+}
+
+model LeadStageHistory {
+  id            String   @id @default(uuid()) @db.Uuid
+  leadId        String   @db.Uuid
+  lead          Lead     @relation(fields: [leadId], references: [id], onDelete: Cascade)
+
+  fromStage     String
+  toStage       String
+  note          String
+  lossReason    String   @default("")
+
+  // Universal Action Tracking
+  createdById   String?  @db.Uuid
+  createdBy     User?    @relation("LeadStageHistoryCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByName String   @default("")
+  updatedById   String?  @db.Uuid
+  updatedByName String   @default("")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([leadId, createdAt(sort: Desc)])
+  @@map("crm_lead_stage_history")
+}
+

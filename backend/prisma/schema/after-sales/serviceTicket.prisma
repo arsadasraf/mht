@@ -1,0 +1,28 @@
+model ServiceTicket {
+  id                String   @id @default(uuid()) @db.Uuid
+  ticketNumber      String   @unique
+  projectId         String
+  customerName      String
+  serviceType       String   @default("WARRANTY_CLAIM") // COMMISSIONING, WARRANTY_CLAIM, PREVENTIVE_MAINTENANCE, SPARE_PARTS
+  title             String
+  description       String   @default("")
+  severity          String   @default("MEDIUM") // LOW, MEDIUM, HIGH, CRITICAL
+  status            String   @default("OPEN") // OPEN, IN_PROGRESS, RESOLVED_CLOSED
+  warrantyStatus    String   @default("UNDER_WARRANTY")
+  fieldEngineerId   String?  @db.Uuid
+  fieldEngineerName String   @default("")
+  resolutionNotes   String   @default("")
+  resolvedAt        DateTime?
+
+  // Universal Action Tracking
+  createdById       String?  @db.Uuid
+  createdByName     String   @default("")
+  updatedById       String?  @db.Uuid
+  updatedByName     String   @default("")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  @@index([projectId])
+  @@map("after_sales_service_tickets")
+}
+

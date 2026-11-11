@@ -3,8 +3,8 @@
 # Machine House - Winding Technologies ("House of Innovations.....")
 #
 # Services (Image-only Pull & Run Architecture):
-#   1. mongodb   - Database image with persistent volume & mongosh healthcheck
-#   2. backend   - Node.js Alpine Express API Server (fetches pre-built image)
+#   1. postgres  - PostgreSQL 16 database with persistent volume & pg_isready healthcheck
+#   2. backend   - Node.js Express API Server (fetches pre-built image)
 #   3. frontend  - Next.js Standalone Runner (fetches pre-built image)
 #
 # Network:
@@ -13,20 +13,24 @@
 
 services:
   # ----------------------------------------------------------------------------
-  # 1. MongoDB Database
+  # 1. PostgreSQL Database
   # ----------------------------------------------------------------------------
-  mongodb:
-    image: mongo:latest
-    container_name: mht-mongodb
+  postgres:
+    image: postgres:16-alpine
+    container_name: mht-postgres
     restart: unless-stopped
     ports:
-      - "27017:27017"
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-Asraf@123}
+      POSTGRES_DB: ${POSTGRES_DB:-mht_erp}
     volumes:
-      - /mnt/mongodb-data:/data/db
+      - postgres_data:/var/lib/postgresql/data
     networks:
       - mht-network
     healthcheck:
-      test: [ "CMD", "mongosh", "--eval", "db.adminCommand('ping')" ]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-postgres} -d $${POSTGRES_DB:-mht_erp}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -46,7 +50,7 @@ services:
     volumes:
       - backend_uploads:/app/uploads
     depends_on:
-      mongodb:
+      postgres:
         condition: service_healthy
     networks:
       - mht-network
@@ -79,6 +83,7 @@ networks:
 # Persistent Storage Volumes
 # ------------------------------------------------------------------------------
 volumes:
-
+  postgres_data:
+    name: mht_postgres_data
   backend_uploads:
     name: mht_backend_uploads

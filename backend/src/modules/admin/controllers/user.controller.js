@@ -2,6 +2,11 @@ import bcrypt from 'bcryptjs';
 import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
 
+const getActorName = (user) => {
+  if (!user) return 'System';
+  return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'System';
+};
+
 /**
  * Strips sensitive fields (password, currentRefreshToken) from user records before sending to client.
  */
@@ -124,7 +129,9 @@ export const createUser = async (req, res, next) => {
         isActive: true,
         status: 'ACTIVE',
         createdById: req.user?.id || null,
-        updatedById: req.user?.id || null
+        createdByName: getActorName(req.user),
+        updatedById: req.user?.id || null,
+        updatedByName: getActorName(req.user)
       },
       include: userInclude
     });
@@ -184,7 +191,8 @@ export const updateUser = async (req, res, next) => {
     const beforeSnapshot = sanitizeUser(existingUser);
 
     const updateData = {
-      updatedById: req.user?.id || null
+      updatedById: req.user?.id || null,
+      updatedByName: getActorName(req.user)
     };
 
     if (firstName !== undefined) updateData.firstName = firstName;
@@ -396,6 +404,7 @@ export const toggleUserStatus = async (req, res, next) => {
         status: newStatus,
         isActive,
         updatedById: req.user?.id || null,
+        updatedByName: getActorName(req.user),
         deactivatedAt: isActive ? null : new Date(),
         deactivatedById: isActive ? null : req.user?.id || null,
         ...(isActive ? {} : { currentRefreshToken: null, isOnline: false })

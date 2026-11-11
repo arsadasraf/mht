@@ -1,0 +1,39 @@
+model FgItemMaster {
+  id               String       @id @default(uuid()) @db.Uuid
+  name             String       // Item Name (e.g. "RRO420-01-02-00-01")
+  classification   String       @default("COMPONENT") // COMPONENT, SUB_ASSEMBLY, ASSEMBLY
+  categoryCode     String?      @default("")
+  categoryName     String?      @default("")
+  revision         String       @default("Rev 1.0") // e.g. "Rev 1.0", "Rev 2.0"
+  description      String?      @default("")
+
+  // Storage & Inventory (Primary UOM only - Zero Dual Unit)
+  uom              String       @default("Nos") // Primary Unit
+  hsnCode          String?      @default("8479")
+
+  // Attachments (Dedicated S3 paths: design/fg/photos/ and design/fg/documents/)
+  photos           String[]     @default([])
+  photoUrl         String?      // Primary photo thumbnail
+  pdfUrl           String?      // Technical drawing/datasheet PDF
+  pdfName          String?
+
+  // Attached BOM Line Items: [{ itemType: 'RM-BO' | 'FG', itemId: string, itemName: string, quantity: number, uom: string, description?: string }]
+  bomItems         Json         @default("[]")
+
+  isActive         Boolean      @default(true)
+
+  // Universal Action Tracking
+  createdById      String?      @db.Uuid
+  createdByName    String       @default("")
+  updatedById      String?      @db.Uuid
+  updatedByName    String       @default("")
+  createdAt        DateTime     @default(now())
+  updatedAt        DateTime     @updatedAt
+
+  @@unique([name, revision])
+  @@index([name])
+  @@index([classification])
+  @@index([categoryCode])
+  @@index([isActive])
+  @@map("fg_item_masters")
+}

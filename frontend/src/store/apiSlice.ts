@@ -91,10 +91,12 @@ export const apiSlice = createApi({
     'MasterLookup',
     'MasterDomain',
     'StageMaster',
+    'DesignMaster',
     'MaterialRequest',
     'WipInventory',
     'DeliveryChallan',
-    'StoreMaster'
+    'StoreMaster',
+    'DesignDashboard'
   ],
   endpoints: () => ({})
 });

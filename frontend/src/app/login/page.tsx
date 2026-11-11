@@ -50,8 +50,8 @@ export default function LoginPage() {
   const router = useRouter();
   const dispatch = useAppDispatch();
 
-  const [email, setEmail] = useState('asrafali444u@gmail.com');
-  const [password, setPassword] = useState('Admin@MH2026!');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
   const [fixHint, setFixHint] = useState('');

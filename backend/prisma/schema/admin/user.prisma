@@ -40,27 +40,6 @@ enum LoginStatus {
   BLOCKED_IP
 }
 
-model Role {
-  id            String   @id @default(uuid()) @db.Uuid
-  name          String   @unique
-  slug          String   @unique
-  description   String?
-  allowedRoutes String[] @default([])
-  isSystemRole  Boolean  @default(false)
-
-  users         User[]   @relation("UserRole")
-
-  createdById   String?  @db.Uuid
-  createdBy     User?    @relation("RoleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
-  updatedById   String?  @db.Uuid
-  updatedBy     User?    @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
-
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
-
-  @@map("roles")
-}
-
 model User {
   id                   String      @id @default(uuid()) @db.Uuid
   firstName            String
@@ -101,20 +80,39 @@ model User {
   whitelistedIps       String[]    @default([])
   allowedRoutes        String[]    @default([])
 
-  // Universal Action Tracking
+  // Universal Action Tracking (Who Created & Who Updated Last)
   createdById          String?     @db.Uuid
   createdBy            User?       @relation("UserCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
   createdUsers         User[]      @relation("UserCreatedBy")
+  createdByName        String      @default("")
 
   updatedById          String?     @db.Uuid
   updatedBy            User?       @relation("UserUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
   updatedUsers         User[]      @relation("UserUpdatedBy")
+  updatedByName        String      @default("")
 
   // Relations
   loginHistory         UserLoginHistory[]
   auditLogs            AuditLog[]  @relation("AuditPerformedBy")
   rolesCreated         Role[]      @relation("RoleCreatedBy")
   rolesUpdated         Role[]      @relation("RoleUpdatedBy")
+  customersCreated           Customer[]          @relation("CustomerCreatedBy")
+  customersUpdated           Customer[]          @relation("CustomerUpdatedBy")
+  customerPosCreated         CustomerPo[]        @relation("CustomerPoCreatedBy")
+  customerPosUpdated         CustomerPo[]        @relation("CustomerPoUpdatedBy")
+  productCategoriesCreated   ProductCategory[]   @relation("ProductCategoryCreatedBy")
+  productCategoriesUpdated   ProductCategory[]   @relation("ProductCategoryUpdatedBy")
+  machineProductsCreated     MachineProduct[]    @relation("MachineProductCreatedBy")
+  machineProductsUpdated     MachineProduct[]    @relation("MachineProductUpdatedBy")
+  crmConfigsCreated          CrmMasterConfig[]   @relation("CrmConfigCreatedBy")
+  crmConfigsUpdated          CrmMasterConfig[]   @relation("CrmConfigUpdatedBy")
+  leadsAssigned              Lead[]              @relation("LeadAssignedTo")
+  leadsCreated               Lead[]              @relation("LeadCreatedBy")
+  leadsUpdated               Lead[]              @relation("LeadUpdatedBy")
+  leadFollowUpsCreated       LeadFollowUpNote[]  @relation("LeadFollowUpCreatedBy")
+  leadStageHistoriesCreated  LeadStageHistory[]  @relation("LeadStageHistoryCreatedBy")
+  quotationsCreated          Quotation[]         @relation("QuotationCreatedBy")
+  quotationsUpdated          Quotation[]         @relation("QuotationUpdatedBy")
 
   createdAt            DateTime    @default(now())
   updatedAt            DateTime    @updatedAt
@@ -140,27 +138,3 @@ model UserLoginHistory {
   @@map("user_login_history")
 }
 
-model AuditLog {
-  id                 String   @id @default(uuid()) @db.Uuid
-  action             String
-  module             String
-  entityId           String?
-  entityType         String?
-
-  performedById      String?  @db.Uuid
-  performedBy        User?    @relation("AuditPerformedBy", fields: [performedById], references: [id], onDelete: SetNull)
-  performedByName    String   @default("System")
-  performedByEmail   String?
-  role               String?
-
-  ipAddress          String   @default("127.0.0.1")
-  userAgent          String?
-  beforeDataSnapshot Json?
-  afterDataSnapshot  Json?
-  notes              String?
-  timestamp          DateTime @default(now())
-
-  @@index([module, timestamp(sort: Desc)])
-  @@index([action])
-  @@map("audit_logs")
-}

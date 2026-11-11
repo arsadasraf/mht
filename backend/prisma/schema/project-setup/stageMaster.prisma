@@ -1,0 +1,68 @@
+model StageMaster {
+  id                 String   @id @default(uuid()) @db.Uuid
+  stageCode          String   @unique
+  stageName          String
+  departmentModule   String   @default("project-setup")
+  defaultOrder       Int      @default(1)
+  leadRole           String   @default("Project Manager")
+  standardDaysOffset Int      @default(14)
+  weightPercent      Float    @default(10)
+  description        String   @default("")
+  isActive           Boolean  @default(true)
+
+  // Universal Action Tracking
+  createdById        String?  @db.Uuid
+  createdByName      String   @default("")
+  updatedById        String?  @db.Uuid
+  updatedByName      String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([defaultOrder])
+  @@index([departmentModule])
+  @@index([isActive])
+  @@map("stage_masters")
+}
+
+model DepartmentSubStageMaster {
+  id               String   @id @default(uuid()) @db.Uuid
+  subStageCode     String   @unique
+  subStageName     String
+  departmentModule String   @default("design")
+  parentStageCode  String   @default("DESIGN_BOM")
+  defaultOrder     Int      @default(1)
+  standardDays     Int      @default(5)
+  weightPercent    Float    @default(20)
+  description      String   @default("")
+  isActive         Boolean  @default(true)
+
+  // Universal Action Tracking
+  createdById      String?  @db.Uuid
+  createdByName    String   @default("")
+  updatedById      String?  @db.Uuid
+  updatedByName    String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([departmentModule])
+  @@index([parentStageCode])
+  @@index([defaultOrder])
+  @@map("department_sub_stage_masters")
+}
+
+model ProjectSetupConfig {
+  id               String   @id @default(uuid()) @db.Uuid
+  configKey        String   @unique @default("GLOBAL_PROJECT_SETUP_CONFIG")
+  prefixLockPolicy Json
+
+  // Universal Action Tracking
+  createdById      String?  @db.Uuid
+  createdByName    String   @default("")
+  updatedById      String?  @db.Uuid
+  updatedByName    String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("project_setup_configs")
+}
+

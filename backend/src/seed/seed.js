@@ -43,8 +43,9 @@ const rolesData = [
       '/project-setup/masters',
       '/crm/leads',
       '/crm/quotations',
-      '/design/bom',
-      '/design/drawings',
+      '/design/dashboard',
+      '/design/projects',
+      '/design/masters',
       '/purchase/orders',
       '/store/inventory',
       '/production-trial/assembly',
@@ -58,7 +59,7 @@ const rolesData = [
     name: 'Lead Design Engineer',
     slug: 'design-engineer',
     description: 'Creates 3-level BOMs, uploads CAD files, and manages Engineering Change Orders (ECOs)',
-    allowedRoutes: ['/design/bom', '/design/drawings', '/design/eco', '/project-setup/projects'],
+    allowedRoutes: ['/design/dashboard', '/design/projects', '/design/masters', '/project-setup/projects'],
     isSystemRole: true
   },
   {
@@ -157,10 +158,11 @@ const seedDatabase = async () => {
 
     const superAdminRole = createdRoles.find((r) => r.slug === 'super-admin');
     const adminEmail = (process.env.ADMIN_EMAIL || 'asrafali444u@gmail.com').toLowerCase();
+    const adminPassword = process.env.ADMIN_PASSWORD || 'Asraf@123';
 
     console.log(`🌱 Seeding Sole Super Admin User: ${adminEmail}...`);
     const salt = await bcrypt.genSalt(10);
-    const hashedPassword = await bcrypt.hash('Admin@MH2026!', salt);
+    const hashedPassword = await bcrypt.hash(adminPassword, salt);
 
     const superAdminUser = await basePrisma.user.create({
       data: {
@@ -182,7 +184,7 @@ const seedDatabase = async () => {
     console.log('====================================================');
     console.log('🎉 PostgreSQL Database Seeded Cleanly:');
     console.log(`👤 Super Admin Account: ${superAdminUser.email}`);
-    console.log(`🔑 Default Password:    Admin@MH2026!`);
+    console.log(`🔑 Default Password:    ${adminPassword}`);
     console.log(`🛡️ Roles Seeded:        ${createdRoles.length} Enterprise RBAC Roles`);
     console.log('====================================================');
 

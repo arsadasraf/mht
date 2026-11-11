@@ -1,0 +1,34 @@
+model RmItemMaster {
+  id              String   @id @default(uuid()) @db.Uuid
+  name            String
+  revision        String   @default("Rev 1.0")
+  description     String   @default("")
+  make            String   @default("")
+  categoryCode    String   @default("")
+  categoryName    String   @default("")
+  uom             String   @default("Kg")
+  hsnCode         String   @default("7228")
+  standardRateINR Float    @default(0)
+  isActive        Boolean  @default(true)
+
+  // Photos & PDF Attachments
+  photos          String[] @default([])
+  photoUrl        String?
+  pdfUrl          String?
+  pdfName         String?
+
+  // Universal Action Tracking
+  createdById     String?  @db.Uuid
+  createdByName   String   @default("")
+  updatedById     String?  @db.Uuid
+  updatedByName   String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@unique([name, revision])
+  @@index([categoryCode])
+  @@index([name])
+  @@index([revision])
+  @@index([isActive])
+  @@map("rm_item_masters")
+}

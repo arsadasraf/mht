@@ -49,13 +49,13 @@ export const CORE_MODULES: CoreModule[] = [
     id: 'design',
     name: 'Design & CAD',
     slug: 'design',
-    path: '/design/bom',
+    path: '/design/dashboard',
     icon: 'Compass',
     description: '',
     tabs: [
-      { id: 'bom', label: '3-Level Hierarchical BOM', path: '/design/bom', icon: 'Layers' },
-      { id: 'drawings', label: 'CAD Drawings & IP', path: '/design/drawings', icon: 'FileCode2' },
-      { id: 'eco', label: 'ECO & Freeze Orders', path: '/design/eco', icon: 'AlertTriangle' }
+      { id: 'dashboard', label: 'Dashboard', path: '/design/dashboard', icon: 'PieChart' },
+      { id: 'projects', label: 'Projects', path: '/design/projects', icon: 'FolderGit2' },
+      { id: 'masters', label: 'Master', path: '/design/masters', icon: 'Settings' }
     ]
   },
   {

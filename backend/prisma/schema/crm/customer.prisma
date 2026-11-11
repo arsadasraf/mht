@@ -1,0 +1,116 @@
+enum CustomerTier {
+  TIER_1
+  TIER_2
+  TIER_3
+  STRATEGIC
+  STANDARD
+}
+
+enum CustomerCurrency {
+  INR
+  USD
+  EUR
+  GBP
+  JPY
+}
+
+enum TaxRegistrationType {
+  REGULAR_GST
+  COMPOSITION
+  SEZ_DEVELOPER
+  DEEMED_EXPORT
+  OVERSEAS_EXPORT
+}
+
+enum CustomerStatus {
+  ACTIVE
+  INACTIVE
+  BLOCKED
+  PROSPECT
+}
+
+model Customer {
+  id           String       @id @default(uuid()) @db.Uuid
+  customerCode String       @unique
+  companyName  String       @unique
+  displayName  String       @default("")
+  customerType String       @default("TRANSFORMER_OEM")
+  tier         CustomerTier @default(STANDARD)
+  industry     String       @default("Electrical & Power Machinery")
+  website      String       @default("")
+
+  // Business Profile & Additional Info Fields
+  briefAboutCustomerBusiness String @default("")
+  anyOtherInformation        String @default("")
+
+  // Commercial & Credit Terms
+  currency                 CustomerCurrency @default(INR)
+  paymentTerms             String           @default("30% Advance, 60% Against Proforma, 10% Post Commissioning")
+  creditPeriodDays         Int              @default(30)
+  creditLimitINR           Float            @default(0)
+  priceListDiscountPercent Float            @default(0)
+
+  // Structured JSONB Value Objects (1:1 Frontend Parity)
+  billingAddress  Json
+  shippingAddress Json
+  primaryContact  Json
+  bankDetails     Json
+
+  // Relational Child Table for Additional Contact Persons & Purchase Orders
+  additionalContacts CustomerContact[]
+  customerPos        CustomerPo[]      @relation("CustomerPurchaseOrders")
+
+  // Statutory & Tax Compliance Details
+  gstin               String              @default("")
+  pan                 String              @default("")
+  cin                 String              @default("")
+  tan                 String              @default("")
+  msmeRegistrationNo  String              @default("")
+  taxRegistrationType TaxRegistrationType @default(REGULAR_GST)
+
+  // Operational Notes & Instructions
+  notes                       String @default("")
+  specialShippingInstructions String @default("")
+
+  // Record Status
+  status   CustomerStatus @default(ACTIVE)
+  isActive Boolean        @default(true)
+
+  // Universal Action Tracking (Who Created & Who Updated Last)
+  createdById   String? @db.Uuid
+  createdBy     User?   @relation("CustomerCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByName String  @default("")
+
+  updatedById   String? @db.Uuid
+  updatedBy     User?   @relation("CustomerUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedByName String  @default("")
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerCode])
+  @@index([companyName])
+  @@index([gstin])
+  @@index([status])
+  @@map("customers")
+}
+
+model CustomerContact {
+  id         String   @id @default(uuid()) @db.Uuid
+  customerId String   @db.Uuid
+  customer   Customer @relation(fields: [customerId], references: [id], onDelete: Cascade)
+
+  name        String
+  designation String  @default("")
+  department  String  @default("")
+  mobile      String  @default("")
+  phone       String  @default("")
+  email       String  @default("")
+  isPrimary   Boolean @default(false)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([customerId])
+  @@map("customer_contacts")
+}

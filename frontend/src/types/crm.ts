@@ -5,8 +5,11 @@ export type LeadStage =
   | 'CONTACTED'
   | 'TECHNICAL_REVIEW'
   | 'QUOTATION_PREPARED'
+  | 'QUOTE_PREPARED'
   | 'NEGOTIATION'
   | 'WON'
+  | 'IN_PRODUCTION'
+  | 'DISPATCHED'
   | 'LOST';
 
 export type LeadPriority = 'LOW' | 'MEDIUM' | 'HIGH' | 'URGENT';
@@ -20,6 +23,35 @@ export interface LeadProductLine {
   lineTotal: number;
   specifications?: string;
   customToolingNotes?: string;
+}
+
+export interface LeadFollowUpNote {
+  _id?: string;
+  id?: string;
+  leadId?: string;
+  stageAtNote: string;
+  note: string;
+  nextFollowUpDate?: string | null;
+  createdById?: string;
+  createdByName?: string;
+  updatedById?: string;
+  updatedByName?: string;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface LeadStageHistory {
+  _id?: string;
+  id?: string;
+  leadId?: string;
+  fromStage?: string | null;
+  toStage: string;
+  transitionNote: string;
+  createdById?: string;
+  createdByName?: string;
+  changedByName?: string;
+  changedAt?: string;
+  createdAt: string;
 }
 
 export interface Lead {
@@ -38,102 +70,231 @@ export interface Lead {
   stage: LeadStage;
   products: LeadProductLine[];
   estimatedValueINR: number;
-  assignedTo?: Pick<User, '_id' | 'firstName' | 'lastName' | 'email'>;
+  assignedTo?: Pick<User, '_id' | 'firstName' | 'lastName' | 'email'> | { _id: string; name?: string; email?: string };
   notes?: string;
+  followUpNotes?: LeadFollowUpNote[];
+  stageHistory?: LeadStageHistory[];
+  convertedProjectId?: string;
+  createdByName?: string;
+  updatedByName?: string;
+  createdBy?: { _id: string; id?: string; name: string; email: string; department?: string };
+  updatedBy?: { _id: string; id?: string; name: string; email: string; department?: string };
   createdAt: string;
   updatedAt: string;
 }
 
+export type OrderAcceptanceStatus = 'DRAFT' | 'OA_SENT' | 'OA_ACKNOWLEDGED';
+
 export type CustomerPoStatus =
+  | 'RECEIVED'
+  | 'OA_ISSUED'
+  | 'WORK_ORDER_CREATED'
+  | 'PROJECT_CONVERTED'
+  | 'IN_PROGRESS'
+  | 'DISPATCHED'
+  | 'COMMISSIONED'
+  | 'CANCELLED'
   | 'PENDING_ADVANCE'
   | 'ADVANCE_CLEARED'
-  | 'COMMITTED_TO_PROJECT'
-  | 'CANCELLED';
+  | 'COMMITTED_TO_PROJECT';
+
+export const CUSTOMER_PO_LIFECYCLE_STAGES: {
+  value: CustomerPoStatus;
+  label: string;
+  badgeClass: string;
+}[] = [
+  { value: 'RECEIVED', label: 'Received', badgeClass: 'bg-slate-100 text-slate-800 border-slate-300' },
+  { value: 'OA_ISSUED', label: 'OA Issued', badgeClass: 'bg-sky-50 text-sky-700 border-sky-300' },
+  { value: 'WORK_ORDER_CREATED', label: 'Work Order Created', badgeClass: 'bg-purple-50 text-purple-700 border-purple-300' },
+  { value: 'IN_PROGRESS', label: 'In Progress', badgeClass: 'bg-amber-50 text-amber-700 border-amber-300' },
+  { value: 'DISPATCHED', label: 'Dispatched', badgeClass: 'bg-blue-50 text-blue-700 border-blue-300' },
+  { value: 'COMMISSIONED', label: 'Commissioned', badgeClass: 'bg-emerald-50 text-emerald-700 border-emerald-300' },
+  { value: 'CANCELLED', label: 'Cancelled', badgeClass: 'bg-red-50 text-red-700 border-red-300' }
+];
+
+export type PoItemQtyType = 'NUMERIC' | 'EXTRA' | 'INCLUDED';
 
 export interface CustomerPoItem {
   _id?: string;
+  id?: string;
+  slNo?: number;
   itemCode?: string;
   modelCode?: string;
   description: string;
+  specifications?: string;
   hsnCode?: string;
+  qtyType?: PoItemQtyType;
   quantity: number;
+  qtyLabel?: string;
+  uom?: string;
   unitPrice: any;
   taxRate?: number;
   taxAmount?: any;
-  lineTotal: any;
-  specifications?: string;
+  totalAmount?: any;
+  lineTotal?: any;
+}
+
+export interface OrderAcceptanceTerms {
+  priceBasis: string;
+  tax: string;
+  delivery: string;
+  paymentTerms: string;
+  installationAndCommissioning: string;
+  freight: string;
+  packaging: string;
+  insurance: string;
+  validity: string;
+  warranty: string;
+  modeOfPayment: string;
+}
+
+export interface OrderAcceptanceBankDetails {
+  accountName: string;
+  bankName: string;
+  branch: string;
+  accountNo: string;
+  ifscCode: string;
+  gstNo: string;
+}
+
+export interface OrderAcceptanceSignatory {
+  forCompany: string;
+  signatoryName: string;
+  signatoryPhone: string;
+  companyAddress?: string;
+  companyPhone?: string;
+  companyEmail?: string;
+  companyWebsite?: string;
 }
 
 export interface CustomerPo {
   _id: string;
   id?: string;
-  poNumber?: string;
+  poNumber: string;
   customerPoNumber?: string;
   poDate: string;
+  orderAcceptanceNumber?: string;
+  orderAcceptanceDate?: string;
+  deliveryCommitmentDate?: string;
+  deliveryDueDate?: string;
   customerId?: string;
   customerName: string;
   companyName: string;
   contactEmail?: string;
   contactPhone?: string;
   billingAddress?: string;
+  shippingAddress?: string;
   gstin?: string;
   leadId?: string | Lead;
   quotationId?: string;
   items?: CustomerPoItem[];
+  currency?: 'INR' | 'USD' | 'EUR' | 'GBP' | 'JPY';
+  exchangeRate?: number;
+  isLumpSumTotal?: boolean;
   subtotalAmount?: { amount: number; currency: string; baseAmountINR?: number };
   totalTaxAmount?: { amount: number; currency: string; baseAmountINR?: number };
   totalAmount?: { amount: number; currency: string; baseAmountINR?: number };
   totalAmountINR?: number;
-  advanceAmount?: { amount: number; currency: string; baseAmountINR?: number };
-  advanceAmountINR?: number;
-  advancePercentage?: number;
-  advanceRequiredPercent?: number;
-  isAdvanceReceived?: boolean;
-  advanceReceived?: boolean;
-  advanceTransactionRef?: string;
-  advanceReceivedDate?: string;
+  technicalSpecifications?: string;
+  termsAndConditions?: OrderAcceptanceTerms;
+  bankDetails?: OrderAcceptanceBankDetails;
+  signatory?: OrderAcceptanceSignatory;
   paymentTerms?: string;
-  deliveryCommitmentDate?: string;
-  deliveryDueDate?: string;
   s3DocumentKey?: string;
   s3DocumentName?: string;
   presignedDownloadUrl?: string;
   pdfUrl?: string;
   photos?: string[];
+  oaStatus?: OrderAcceptanceStatus;
+  oaSentAt?: string;
+  oaSentToEmail?: string;
+  oaAcknowledgedAt?: string;
   status: any;
   convertedProjectId?: string;
   convertedToProjectId?: string;
   convertedAt?: string;
   notes?: string;
+  createdByName?: string;
+  updatedByName?: string;
+  createdBy?: { _id: string; id?: string; name: string; email: string; department?: string };
+  updatedBy?: { _id: string; id?: string; name: string; email: string; department?: string };
   createdAt: string;
   updatedAt: string;
 }
 
 export interface QuotationItem {
-  modelCode: string;
-  modelName: string;
+  itemCode?: string;
+  modelCode?: string;
+  modelName?: string;
+  description?: string;
+  hsnCode?: string;
+  qtyType?: 'STANDARD' | 'INCLUDED' | 'EXTRA';
   quantity: number;
+  qtyLabel?: string;
+  uom?: string;
   unitPrice: number;
-  totalPrice: number;
+  totalPrice?: number;
+  taxRate?: number;
+  taxAmount?: number;
+  totalAmount?: number;
   specifications?: string;
 }
 
 export interface Quotation {
   _id: string;
+  id?: string;
   quoteNumber: string;
+  baseQuoteNumber?: string;
+  revisionNumber?: number;
+  revisionCode?: string;
+  isLatestRevision?: boolean;
+  parentQuotationId?: string;
+  revisionNotes?: string;
+  revisionCount?: number;
+  revisions?: Quotation[];
   leadId: string | Lead;
   customerName: string;
   companyName: string;
+  contactEmail?: string;
+  contactPhone?: string;
+  billingAddress?: string;
+  shippingAddress?: string;
+  gstin?: string;
   items: QuotationItem[];
   subtotalINR: number;
   taxAmountINR: number;
   grandTotalINR: number;
+  subtotalAmount?: { amount: number; currency: string; baseAmountINR?: number };
+  taxAmount?: { amount: number; currency: string; baseAmountINR?: number };
+  totalAmount?: { amount: number; currency: string; baseAmountINR?: number };
   currency: string;
   exchangeRate: number;
+  taxRatePercent?: number;
+  gstCategory?: 'INTRA_STATE' | 'INTER_STATE';
+  isGstIncluded?: boolean;
+  packingType?: 'INCLUDED' | 'PERCENT' | 'FIXED';
+  packingValue?: number;
+  isPackingGstApplicable?: boolean;
+  packingAmount?: { amount: number; currency: string; baseAmountINR?: number };
+  transportationType?: 'BUYER_ACTUALS' | 'INCLUDED' | 'FIXED';
+  transportationValue?: number;
+  isTransportationGstApplicable?: boolean;
+  transportationAmount?: { amount: number; currency: string; baseAmountINR?: number };
   paymentTerms: string;
   deliveryWeeks: number;
-  validityDays: number;
-  status: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REVISED' | 'DECLINED';
+  validityDays?: number;
+  validUntil?: string;
+  warrantyMonths?: number;
+  notes?: string;
+  termsAndConditions?: any;
+  bankDetails?: any;
+  signatory?: any;
+  companySnapshot?: Partial<CompanyBillingInfo>;
+  status: 'DRAFT' | 'SENT' | 'ACCEPTED' | 'REVISED' | 'DECLINED' | 'SUPERSEDED' | 'PO_RECEIVED' | 'EXPIRED' | 'REJECTED';
+  createdByName?: string;
+  updatedByName?: string;
+  createdBy?: { _id: string; id?: string; name: string; email: string; department?: string };
+  updatedBy?: { _id: string; id?: string; name: string; email: string; department?: string };
   createdAt: string;
   updatedAt: string;
 }
@@ -145,14 +306,18 @@ export interface TechnicalSpecification {
 
 export interface ProductCategory {
   _id?: string;
+  id?: string;
   name: string;
   slug?: string;
   description?: string;
   isActive?: boolean;
+  createdByName?: string;
+  updatedByName?: string;
 }
 
 export interface MachineCatalogProduct {
   _id?: string;
+  id?: string;
   modelCode: string;
   modelName: string;
   category: string;
@@ -177,6 +342,10 @@ export interface MachineCatalogProduct {
   weightKg?: number;
   features?: string[];
   isActive?: boolean;
+  createdByName?: string;
+  updatedByName?: string;
+  createdAt?: string;
+  updatedAt?: string;
 }
 
 export interface CompanyBillingInfo {
@@ -195,6 +364,27 @@ export interface CompanyBillingInfo {
   swiftCode: string;
   authorizedSignatory: string;
   standardTerms: string;
+  logoIconUrl?: string;
+  logoPlateUrl?: string;
+  pdfHeaderBannerUrl?: string;
+  pdfPhotos?: string[];
+}
+
+export interface CrmPrefixLockPolicy {
+  customerPrefix: string;
+  customerStartSeq: number;
+  enquiryPrefix: string;
+  enquiryStartSeq: number;
+  quotationPrefix: string;
+  quotationStartSeq: number;
+  orderAcceptancePrefix: string;
+  orderAcceptanceStartSeq: number;
+  requireNoteOnStageChange: boolean;
+  lockEnquiryOnPoReceived: boolean;
+  lockQuotationOnPoReceived: boolean;
+  lockCustomerPoOnProjectConverted: boolean;
+  poEditDeleteTimeLimitMinutes?: number;
+  allowEditSentQuotationWithoutRevision: boolean;
 }
 
 export interface LeadSourceCredential {
@@ -222,6 +412,10 @@ export interface CrmMasters {
   paymentTerms: string[];
   exchangeRates: Record<string, number>;
   companyBillingInfo: CompanyBillingInfo;
+  prefixLockPolicy?: CrmPrefixLockPolicy;
+  createdByName?: string;
+  updatedByName?: string;
+  updatedAt?: string;
 }
 
 export interface CustomerContactPerson {
@@ -272,6 +466,7 @@ export interface CustomerBankDetails {
 
 export interface Customer {
   _id: string;
+  id?: string;
   customerCode: string;
   companyName: string;
   displayName?: string;
@@ -279,6 +474,8 @@ export interface Customer {
   tier?: 'TIER_1' | 'TIER_2' | 'TIER_3' | 'STRATEGIC' | 'STANDARD';
   industry?: string;
   website?: string;
+  briefAboutCustomerBusiness?: string;
+  anyOtherInformation?: string;
   currency: 'INR' | 'USD' | 'EUR' | 'GBP' | 'JPY';
   paymentTerms?: string;
   creditPeriodDays?: number;
@@ -313,8 +510,10 @@ export interface Customer {
 
   status?: 'ACTIVE' | 'INACTIVE' | 'BLOCKED' | 'PROSPECT';
   isActive?: boolean;
-  createdBy?: { _id: string; name: string; email: string };
-  updatedBy?: { _id: string; name: string; email: string };
+  createdByName?: string;
+  updatedByName?: string;
+  createdBy?: { _id: string; id?: string; name: string; email: string; department?: string };
+  updatedBy?: { _id: string; id?: string; name: string; email: string; department?: string };
   createdAt: string;
   updatedAt: string;
 }

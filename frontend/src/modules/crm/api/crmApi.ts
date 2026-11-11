@@ -58,10 +58,22 @@ export const crmApi = apiSlice.injectEndpoints({
       ]
     }),
 
-    updateLeadStage: builder.mutation<{ success: boolean; lead: Lead }, { id: string; stage: string; lossReason?: string; notes?: string }>({
+    updateLeadStage: builder.mutation<{ success: boolean; lead: Lead }, { id: string; stage: string; lossReason?: string; notes?: string; transitionNote?: string }>({
       query: ({ id, ...body }) => ({
         url: `/crm/leads/${id}/stage`,
         method: 'PATCH',
+        body
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Lead', id },
+        { type: 'Lead', id: 'LIST' }
+      ]
+    }),
+
+    addLeadFollowUpNote: builder.mutation<{ success: boolean; message: string; note: any; lead: Lead }, { id: string; note: string; nextFollowUpDate?: string }>({
+      query: ({ id, ...body }) => ({
+        url: `/crm/leads/${id}/notes`,
+        method: 'POST',
         body
       }),
       invalidatesTags: (result, error, { id }) => [
@@ -129,6 +141,24 @@ export const crmApi = apiSlice.injectEndpoints({
         { type: 'Quotation', id },
         { type: 'Quotation', id: 'LIST' }
       ]
+    }),
+
+    createQuotationRevision: builder.mutation<{ success: boolean; message: string; quotation: Quotation }, { id: string } & Partial<Quotation>>({
+      query: ({ id, ...body }) => ({
+        url: `/crm/deals/${id}/revise`,
+        method: 'POST',
+        body
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'Quotation', id },
+        { type: 'Quotation', id: 'LIST' },
+        { type: 'Lead', id: 'LIST' }
+      ]
+    }),
+
+    getQuotationRevisions: builder.query<{ success: boolean; baseQuoteNumber: string; totalRevisions: number; revisions: Quotation[] }, string>({
+      query: (id) => `/crm/deals/${id}/revisions`,
+      providesTags: (result, error, id) => [{ type: 'Quotation', id }]
     }),
 
     convertQuotationToProject: builder.mutation<{ success: boolean; project: unknown }, { id: string; targetDispatchDate?: string }>({
@@ -217,7 +247,7 @@ export const crmApi = apiSlice.injectEndpoints({
       ]
     }),
 
-    updateCustomerPo: builder.mutation<{ success: boolean; customerPo: CustomerPo }, { id: string } & Partial<CustomerPo>>({
+    updateCustomerPo: builder.mutation<{ success: boolean; message?: string; customerPo: CustomerPo }, { id: string } & Partial<CustomerPo>>({
       query: ({ id, ...body }) => ({
         url: `/crm/customer-pos/${id}`,
         method: 'PUT',
@@ -227,6 +257,44 @@ export const crmApi = apiSlice.injectEndpoints({
         { type: 'CustomerPo', id },
         { type: 'CustomerPo', id: 'LIST' }
       ]
+    }),
+
+    updateOrderAcceptanceStatus: builder.mutation<
+      { success: boolean; message: string; customerPo: CustomerPo },
+      { id: string; oaStatus: 'DRAFT' | 'OA_SENT' | 'OA_ACKNOWLEDGED'; oaSentToEmail?: string; notes?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/crm/customer-pos/${id}/order-acceptance`,
+        method: 'POST',
+        body
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'CustomerPo', id },
+        { type: 'CustomerPo', id: 'LIST' }
+      ]
+    }),
+
+    generateOrderAcceptance: builder.mutation<
+      { success: boolean; message: string; customerPo: CustomerPo },
+      { id: string; deliveryCommitmentDate: string; orderAcceptanceDate?: string; orderAcceptanceNumber?: string; notes?: string }
+    >({
+      query: ({ id, ...body }) => ({
+        url: `/crm/customer-pos/${id}/generate-oa`,
+        method: 'POST',
+        body
+      }),
+      invalidatesTags: (result, error, { id }) => [
+        { type: 'CustomerPo', id },
+        { type: 'CustomerPo', id: 'LIST' }
+      ]
+    }),
+
+    deleteCustomerPo: builder.mutation<{ success: boolean; message: string }, string>({
+      query: (id) => ({
+        url: `/crm/customer-pos/${id}`,
+        method: 'DELETE'
+      }),
+      invalidatesTags: [{ type: 'CustomerPo', id: 'LIST' }]
     }),
 
     convertCustomerPoToProject: builder.mutation<{ success: boolean; project: unknown; customerPo: CustomerPo }, { id: string } & Record<string, unknown>>({
@@ -259,7 +327,10 @@ export const crmApi = apiSlice.injectEndpoints({
       })
     }),
 
-    uploadDirectToS3: builder.mutation<{ success: boolean; key: string }, { key: string; contentType?: string; fileData?: string }>({
+    uploadDirectToS3: builder.mutation<
+      { success: boolean; key: string; url?: string; message?: string },
+      { key: string; contentType?: string; base64Data: string; fileData?: string }
+    >({
       query: (body) => ({
         url: '/s3/direct-upload',
         method: 'POST',
@@ -370,12 +441,16 @@ export const {
   useCreateLeadMutation,
   useUpdateLeadMutation,
   useUpdateLeadStageMutation,
+  useAddLeadFollowUpNoteMutation,
   useBulkImportLeadsMutation,
   useDeleteLeadMutation,
   useGetQuotationsQuery,
   useGetQuotationByIdQuery,
   useCreateQuotationMutation,
   useUpdateQuotationMutation,
+  useCreateQuotationRevisionMutation,
+  useGetQuotationRevisionsQuery,
+  useLazyGetQuotationRevisionsQuery,
   useConvertQuotationToProjectMutation,
   useGetCrmMastersQuery,
   useUpdateCrmMastersMutation,
@@ -386,6 +461,9 @@ export const {
   useGetCustomerPoByIdQuery,
   useCreateCustomerPoMutation,
   useUpdateCustomerPoMutation,
+  useUpdateOrderAcceptanceStatusMutation,
+  useGenerateOrderAcceptanceMutation,
+  useDeleteCustomerPoMutation,
   useConvertCustomerPoToProjectMutation,
   useLazyGetS3PresignedUploadQuery,
   useLazyGetS3PresignedDownloadQuery,

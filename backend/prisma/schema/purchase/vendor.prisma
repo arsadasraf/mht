@@ -1,0 +1,34 @@
+model Vendor {
+  id               String   @id @default(uuid()) @db.Uuid
+  vendorCode       String   @unique
+  name             String   // Vendor Names
+  type             String   @default("MANUFACTURER") // Type (Manufacturer, Trader, Fabricator, Service, OEM)
+  natureOfWork     String   @default("") // Nature of Work (Machining, Sheet Metal, Fasteners, Electrical, etc.)
+  priority         String   @default("P1 - High") // Priority (P1 - High, P2 - Medium, P3 - Low)
+  address          String   @default("") // Address
+  email            String   @default("") // Email ID
+  phone            String   @default("") // Contact No
+  contactPerson    String   @default("") // Name (Contact Person)
+  gstin            String   @default("") // GST No
+  paymentTerm      String   @default("30 Days Net") // Payment Term
+  category         String   @default("ELECTRICAL_COMPONENTS")
+  paymentTermsDays Int      @default(30)
+  rating           Float    @default(4.5)
+  isActive         Boolean  @default(true)
+
+  // Universal Action Tracking
+  createdById      String?  @db.Uuid
+  createdByName    String   @default("")
+  updatedById      String?  @db.Uuid
+  updatedByName    String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([vendorCode])
+  @@index([name])
+  @@index([type])
+  @@index([priority])
+  @@index([category])
+  @@map("purchase_vendors")
+}
+

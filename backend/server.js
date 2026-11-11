@@ -6,6 +6,7 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import app from './src/app.js';
 import { connectDatabase, disconnectDB } from './src/config/db.config.js';
+import { bootstrapAdminAccount } from './src/modules/admin/services/adminBootstrap.service.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -21,6 +22,7 @@ const PORT = process.env.PORT || 5000;
 const startServer = async () => {
   try {
     await connectDatabase();
+    await bootstrapAdminAccount();
     const server = app.listen(PORT, () => {
       console.log(`====================================================`);
       console.log(`🚀 Machine House (MH) ERP Server running on port ${PORT}`);

@@ -1,0 +1,56 @@
+model VendorPriceAgreement {
+  id              String   @id @default(uuid()) @db.Uuid
+  itemCode        String
+  itemName        String   @default("")
+  description     String   @default("")
+  itemType        String   @default("RM_BO") // RM_BO, COMPONENT, SUB_ASSEMBLY, ASSEMBLY, FG
+  category        String   @default("")
+  vendorCode      String   @default("")
+  vendorName      String
+  unitPrice       Float    @default(0)
+  taxRatePercent  Float    @default(18)
+  currency        String   @default("INR")
+  uom             String   @default("Nos")
+  secondaryUom    String?
+  conversionRatio Float?   @default(1)
+  equivalentRate  Float?   @default(0)
+  moq             Int      @default(1)
+  leadTimeDays    Int      @default(7)
+  effectiveFrom   String   @default("")
+  effectiveTo     String   @default("")
+  isPreferred     Boolean  @default(true)
+  remarks         String   @default("")
+  isActive        Boolean  @default(true)
+
+  // Universal Action Tracking
+  createdById     String?  @db.Uuid
+  createdByName   String   @default("")
+  updatedById     String?  @db.Uuid
+  updatedByName   String   @default("")
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  @@index([itemCode])
+  @@index([itemType])
+  @@index([vendorName])
+  @@index([isPreferred])
+  @@map("purchase_vendor_price_agreements")
+}
+
+model PurchaseConfig {
+  id               String   @id @default(uuid()) @db.Uuid
+  configKey        String   @unique @default("GLOBAL_PURCHASE_CONFIG")
+  prefixLockPolicy Json     @default("{}")
+  companyProfile   Json     @default("{}")
+
+  // Universal Action Tracking
+  createdById      String?  @db.Uuid
+  createdByName    String   @default("")
+  updatedById      String?  @db.Uuid
+  updatedByName    String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@map("purchase_config")
+}
+

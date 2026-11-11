@@ -1,0 +1,25 @@
+model AuditLog {
+  id                 String   @id @default(uuid()) @db.Uuid
+  action             String
+  module             String
+  entityId           String?
+  entityType         String?
+
+  performedById      String?  @db.Uuid
+  performedBy        User?    @relation("AuditPerformedBy", fields: [performedById], references: [id], onDelete: SetNull)
+  performedByName    String   @default("System")
+  performedByEmail   String?
+  role               String?
+
+  ipAddress          String   @default("127.0.0.1")
+  userAgent          String?
+  beforeDataSnapshot Json?
+  afterDataSnapshot  Json?
+  notes              String?
+  timestamp          DateTime @default(now())
+
+  @@index([module, timestamp(sort: Desc)])
+  @@index([action])
+  @@map("audit_logs")
+}
+

@@ -1,36 +1,109 @@
-import { Project } from '../models/project.model.js';
-import { Milestone } from '../models/milestone.model.js';
-import { StageMaster } from '../models/stageMaster.model.js';
-import { CustomerPo } from '../../crm/models/customerPo.model.js';
+import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
+import {
+  ensureDefaultStageMasters,
+  ensureProjectSetupConfig,
+  DEFAULT_PROJECT_SETUP_POLICY
+} from './stageMaster.controller.js';
+
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+const getActorName = (user) => {
+  if (!user) return 'System';
+  return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || user.email || 'System';
+};
+
+const formatSubStage = (ss) => ({
+  ...ss,
+  _id: ss.id
+});
+
+export const formatMilestone = (m) => ({
+  ...m,
+  _id: m.id,
+  notes: m.notes || '',
+  remarks: Array.isArray(m.remarks) ? m.remarks : [],
+  subStages: Array.isArray(m.subStages) ? m.subStages.map(formatSubStage) : [],
+  signOffBy: m.signOffByName
+    ? {
+        _id: m.signOffById,
+        firstName: m.signOffByName.split(' ')[0] || m.signOffByName,
+        lastName: m.signOffByName.split(' ').slice(1).join(' ') || ''
+      }
+    : null
+});
+
+export const formatProject = (p) => ({
+  ...p,
+  _id: p.id,
+  productDescription: p.productDescription || '',
+  deliveryCommitmentDate: p.deliveryCommitmentDate || null,
+  customerPoRef: p.customerPoNumber
+    ? {
+        _id: p.customerPoId,
+        poNumber: p.customerPoNumber,
+        totalAmount: p.contractValue
+      }
+    : null,
+  milestones: Array.isArray(p.milestones) ? p.milestones.map(formatMilestone) : undefined
+});
 
 export const getProjects = async (req, res, next) => {
   try {
-    const { status, stage, search, page = 1, limit = 50 } = req.query;
-    const query = {};
-    if (status) query.status = status;
-    if (stage) query.currentStage = stage;
+    const { status, stage, search, departmentModule, page = 1, limit = 50 } = req.query;
+    const where = {};
+
+    if (status) where.status = String(status);
+    if (stage) where.currentStage = String(stage);
+    if (departmentModule) {
+      const mod = String(departmentModule).trim().toLowerCase();
+      where.milestones = {
+        some: {
+          OR: [
+            { departmentModule: { equals: mod, mode: 'insensitive' } },
+            { stageCode: { contains: mod, mode: 'insensitive' } },
+            { title: { contains: mod, mode: 'insensitive' } }
+          ]
+        }
+      };
+    }
     if (search) {
-      query.$or = [
-        { projectId: { $regex: search, $options: 'i' } },
-        { workOrderNumber: { $regex: search, $options: 'i' } },
-        { projectName: { $regex: search, $options: 'i' } },
-        { customerName: { $regex: search, $options: 'i' } },
-        { machineModel: { $regex: search, $options: 'i' } }
+      const q = String(search).trim();
+      where.OR = [
+        { projectId: { contains: q, mode: 'insensitive' } },
+        { workOrderNumber: { contains: q, mode: 'insensitive' } },
+        { projectName: { contains: q, mode: 'insensitive' } },
+        { customerName: { contains: q, mode: 'insensitive' } },
+        { machineModel: { contains: q, mode: 'insensitive' } },
+        { customerPoNumber: { contains: q, mode: 'insensitive' } }
       ];
     }
 
-    const total = await Project.countDocuments(query);
-    const projects = await Project.find(query)
-      .populate('projectManager', 'firstName lastName email')
-      .populate('leadDesignEngineer', 'firstName lastName')
-      .populate('leadProductionEngineer', 'firstName lastName')
-      .populate('customerPoRef', 'poNumber poDate totalAmount')
-      .sort({ createdAt: -1 })
-      .skip((page - 1) * limit)
-      .limit(Number(limit));
+    const skip = (Math.max(1, Number(page)) - 1) * Number(limit);
+    const take = Number(limit) || 50;
 
-    res.status(200).json({ success: true, total, page: Number(page), projects });
+    const [total, projects] = await Promise.all([
+      prisma.project.count({ where }),
+      prisma.project.findMany({
+        where,
+        include: {
+          milestones: {
+            orderBy: { order: 'asc' },
+            include: { subStages: { orderBy: { order: 'asc' } } }
+          }
+        },
+        orderBy: { createdAt: 'desc' },
+        skip,
+        take
+      })
+    ]);
+
+    res.status(200).json({
+      success: true,
+      total,
+      page: Number(page),
+      projects: projects.map(formatProject)
+    });
   } catch (error) {
     next(error);
   }
@@ -38,15 +111,52 @@ export const getProjects = async (req, res, next) => {
 
 export const getAvailableCustomerPos = async (req, res, next) => {
   try {
-    const customerPos = await CustomerPo.find({
-      status: { $in: ['RECEIVED', 'VERIFIED'] }
-    })
-      .select('poNumber customerName companyName items totalAmount currency deliveryCommitmentDate poDate status')
-      .sort({ poDate: -1, createdAt: -1 })
-      .limit(30)
-      .lean();
+    const customerPos = await prisma.customerPo.findMany({
+      where: {
+        status: { in: ['RECEIVED', 'OA_ISSUED'] }
+      },
+      include: {
+        items: { orderBy: { slNo: 'asc' } }
+      },
+      orderBy: [{ poDate: 'desc' }, { createdAt: 'desc' }],
+      take: 50
+    });
 
-    res.status(200).json({ success: true, count: customerPos.length, customerPos });
+    res.status(200).json({
+      success: true,
+      count: customerPos.length,
+      customerPos: customerPos.map((po) => ({
+        ...po,
+        _id: po.id,
+        items: (po.items || []).map((it) => ({ ...it, _id: it.id }))
+      }))
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getDepartmentUsers = async (req, res, next) => {
+  try {
+    const users = await prisma.user.findMany({
+      where: { isActive: true },
+      include: { role: true },
+      orderBy: { firstName: 'asc' }
+    });
+
+    res.status(200).json({
+      success: true,
+      users: users.map((u) => ({
+        _id: u.id,
+        id: u.id,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        name: `${u.firstName || ''} ${u.lastName || ''}`.trim() || u.email,
+        email: u.email,
+        department: u.department,
+        roleName: u.role?.name || ''
+      }))
+    });
   } catch (error) {
     next(error);
   }
@@ -55,24 +165,29 @@ export const getAvailableCustomerPos = async (req, res, next) => {
 export const getProjectById = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const project = await Project.findOne({
-      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { projectId: id.toUpperCase() }]
-    })
-      .populate('projectManager', 'firstName lastName email')
-      .populate('leadDesignEngineer', 'firstName lastName email')
-      .populate('leadProductionEngineer', 'firstName lastName email')
-      .populate('customerPoRef', 'poNumber poDate totalAmount')
-      .populate('createdBy', 'firstName lastName');
+    const isUuid = UUID_REGEX.test(id);
+
+    const project = await prisma.project.findFirst({
+      where: isUuid ? { id } : { projectId: id.toUpperCase() },
+      include: {
+        milestones: {
+          orderBy: [{ order: 'asc' }, { baselineDate: 'asc' }],
+          include: {
+            subStages: { orderBy: { order: 'asc' } }
+          }
+        }
+      }
+    });
 
     if (!project) {
       return res.status(404).json({ success: false, message: 'Project not found.' });
     }
 
-    const milestones = await Milestone.find({ projectId: project.projectId })
-      .populate('signOffBy', 'firstName lastName email')
-      .sort({ order: 1, baselineDate: 1 });
-
-    res.status(200).json({ success: true, project, milestones });
+    res.status(200).json({
+      success: true,
+      project: formatProject(project),
+      milestones: (project.milestones || []).map(formatMilestone)
+    });
   } catch (error) {
     next(error);
   }
@@ -80,54 +195,91 @@ export const getProjectById = async (req, res, next) => {
 
 export const createProject = async (req, res, next) => {
   try {
+    const config = await ensureProjectSetupConfig(req.user);
+    const policy = {
+      ...DEFAULT_PROJECT_SETUP_POLICY,
+      ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
+    };
+
     const currentYear = new Date().getFullYear();
-    const count = await Project.countDocuments();
-    const padded = String(count + 1).padStart(3, '0');
-    const projectId = req.body.projectId || `PRJ-${currentYear}-${padded}`;
-    const workOrderNumber = req.body.workOrderNumber || `WO-${currentYear}-${padded}`;
+    const count = await prisma.project.count();
+    const seq = (Number(policy.projectStartSeq) || 1001) + count;
+    const prjPrefix = (policy.projectPrefix || 'PRJ').toUpperCase();
+    const woPrefix = (policy.workOrderPrefix || 'WO').toUpperCase();
+
+    const projectId = req.body.projectId || `${prjPrefix}-${currentYear}-${seq}`;
+    const workOrderNumber = req.body.workOrderNumber || `${woPrefix}-${currentYear}-${seq}`;
 
     const {
-      creationMode, // 'CUSTOMER_PO' or 'DIRECT'
       customerPoId,
       projectName,
       customerName,
       machineModel,
+      productDescription,
+      deliveryCommitmentDate,
       quotationRef,
       contractValue = { currency: 'INR', amount: 0, exchangeRate: 1, baseAmountINR: 0 },
       startDate = new Date(),
       targetDispatchDate,
-      projectManager,
-      leadDesignEngineer,
-      leadProductionEngineer,
       plantLocation,
-      stages // optional custom array of stages selected by user
+      stages
     } = req.body;
 
-    let resolvedCustomerName = customerName;
-    let resolvedMachineModel = machineModel;
+    let resolvedCustomerName = customerName || '';
+    let resolvedMachineModel = machineModel || '';
+    let resolvedProductDescription = productDescription || '';
     let resolvedContractValue = contractValue;
+    let resolvedCommitmentDate = deliveryCommitmentDate ? new Date(deliveryCommitmentDate) : null;
     let resolvedDispatchDate = targetDispatchDate;
-    let customerPoRef = null;
+    let customerPoUuid = null;
     let customerPoNumber = '';
+    let linkedLeadId = null;
 
-    // If based on customer PO, link and auto-extract parameters if not overridden
-    if (customerPoId) {
-      const poDoc = await CustomerPo.findById(customerPoId);
+    if (customerPoId && UUID_REGEX.test(String(customerPoId))) {
+      const poDoc = await prisma.customerPo.findUnique({
+        where: { id: String(customerPoId) },
+        include: { items: { orderBy: { slNo: 'asc' } } }
+      });
+
       if (poDoc) {
-        customerPoRef = poDoc._id;
+        customerPoUuid = poDoc.id;
         customerPoNumber = poDoc.poNumber;
+        linkedLeadId = poDoc.leadId;
         resolvedCustomerName = customerName || poDoc.companyName || poDoc.customerName;
-        const poItemModel = poDoc.items?.[0]?.modelCode || poDoc.items?.[0]?.description;
-        resolvedMachineModel = machineModel || poItemModel || 'Precision Winding Machine';
-        if (!targetDispatchDate && poDoc.deliveryCommitmentDate) {
-          resolvedDispatchDate = poDoc.deliveryCommitmentDate;
+
+        const poItemModels = (poDoc.items || [])
+          .filter((it) => it.qtyType !== 'EXTRA')
+          .map((it) => it.modelCode || it.description)
+          .filter(Boolean)
+          .join(', ');
+        resolvedMachineModel = machineModel || poItemModels || 'Precision Winding Machine';
+
+        if (!resolvedProductDescription && poDoc.items?.length > 0) {
+          resolvedProductDescription = poDoc.items
+            .map((it) => {
+              const parts = [];
+              if (it.modelCode) parts.push(`Model: ${it.modelCode}`);
+              if (it.description) parts.push(it.description);
+              if (it.specifications) parts.push(it.specifications);
+              if (it.quantity) parts.push(`Qty: ${it.quantity} ${it.uom || 'Nos'}`);
+              return parts.join(' — ');
+            })
+            .join('\n');
         }
+
+        if (poDoc.deliveryCommitmentDate) {
+          resolvedCommitmentDate = poDoc.deliveryCommitmentDate;
+          if (!targetDispatchDate) {
+            resolvedDispatchDate = poDoc.deliveryCommitmentDate;
+          }
+        }
+
         if (poDoc.totalAmount && (!contractValue.amount || Number(contractValue.amount) === 0)) {
           resolvedContractValue = {
             currency: poDoc.totalAmount.currency || 'INR',
-            amount: poDoc.totalAmount.amount || 0,
-            exchangeRate: poDoc.totalAmount.exchangeRate || 1.0,
-            baseAmountINR: poDoc.totalAmount.baseAmountINR || poDoc.totalAmount.amount || 0
+            amount: Number(poDoc.totalAmount.amount || 0),
+            exchangeRate: Number(poDoc.totalAmount.exchangeRate || 1.0),
+            baseAmountINR: Number(poDoc.totalAmount.baseAmountINR || poDoc.totalAmount.amount || 0)
           };
         }
       }
@@ -135,185 +287,159 @@ export const createProject = async (req, res, next) => {
 
     const calculatedBaseAmount =
       Math.round(
-        Number(resolvedContractValue.amount || 0) *
-        Number(resolvedContractValue.exchangeRate || 1.0) *
-        100
+        Number(resolvedContractValue.amount || 0) * Number(resolvedContractValue.exchangeRate || 1.0) * 100
       ) / 100;
 
-    const project = new Project({
-      projectId,
-      workOrderNumber,
-      projectName: projectName || `${resolvedCustomerName} — ${resolvedMachineModel}`,
-      customerName: resolvedCustomerName,
-      machineModel: resolvedMachineModel,
-      customerPoRef,
-      customerPoNumber,
-      quotationRef,
-      contractValue: {
-        currency: resolvedContractValue.currency || 'INR',
-        amount: Number(resolvedContractValue.amount || 0),
-        exchangeRate: Number(resolvedContractValue.exchangeRate || 1.0),
-        baseAmountINR: calculatedBaseAmount
-      },
-      startDate: new Date(startDate),
-      targetDispatchDate: resolvedDispatchDate
-        ? new Date(resolvedDispatchDate)
-        : new Date(Date.now() + 90 * 24 * 60 * 60 * 1000), // Default 90 days
-      projectManager,
-      leadDesignEngineer,
-      leadProductionEngineer,
-      plantLocation: plantLocation || 'Main Works - Unit 1',
-      createdBy: req.user?._id,
-      updatedBy: req.user?._id
+    const actorName = getActorName(req.user);
+    const actorRole = req.user?.role?.name || 'Project Manager';
+    const parsedStartDate = new Date(startDate);
+    const parsedTargetDispatchDate = resolvedDispatchDate
+      ? new Date(resolvedDispatchDate)
+      : (resolvedCommitmentDate || new Date(parsedStartDate.getTime() + 90 * 24 * 60 * 60 * 1000));
+
+    const project = await prisma.project.create({
+      data: {
+        projectId,
+        workOrderNumber,
+        projectName: projectName || `${resolvedCustomerName} — ${resolvedMachineModel}`,
+        customerName: resolvedCustomerName,
+        machineModel: resolvedMachineModel,
+        productDescription: resolvedProductDescription,
+        customerPoId: customerPoUuid,
+        customerPoNumber,
+        quotationRef: quotationRef || '',
+        contractValue: {
+          currency: resolvedContractValue.currency || 'INR',
+          amount: Number(resolvedContractValue.amount || 0),
+          exchangeRate: Number(resolvedContractValue.exchangeRate || 1.0),
+          baseAmountINR: calculatedBaseAmount
+        },
+        startDate: parsedStartDate,
+        targetDispatchDate: parsedTargetDispatchDate,
+        deliveryCommitmentDate: resolvedCommitmentDate,
+        plantLocation: plantLocation || 'Main Works - Unit 1',
+        projectManagerId: req.user?.id || null,
+        projectManagerName: actorName,
+        createdById: req.user?.id || null,
+        createdByName: actorName,
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
     });
 
-    await project.save();
-
-    // If linked to Customer PO, mark PO as converted
-    if (customerPoRef) {
-      await CustomerPo.findByIdAndUpdate(customerPoRef, {
-        status: 'PROJECT_CONVERTED',
-        convertedProjectId: project.projectId,
-        convertedAt: new Date(),
-        updatedBy: req.user?._id
+    if (customerPoUuid) {
+      await prisma.customerPo.update({
+        where: { id: customerPoUuid },
+        data: {
+          status: 'PROJECT_CONVERTED',
+          convertedProjectId: project.projectId,
+          convertedAt: new Date(),
+          updatedById: req.user?.id || null,
+          updatedByName: actorName
+        }
       });
-    }
 
-    // Determine Stages to Initialize:
-    // 1. If explicit stages passed by user
-    // 2. Else fetch active StageMaster records
-    // 3. Fallback to default 8 stages
-    let milestonesToCreate = [];
-
-    const authorName = req.user
-      ? `${req.user.firstName || ''} ${req.user.lastName || ''}`.trim() || 'System'
-      : 'System';
-    const authorRole = req.user?.role?.name || 'Project Manager';
-
-    if (Array.isArray(stages) && stages.length > 0) {
-      milestonesToCreate = stages.map((s, idx) => {
-        const offset = s.daysOffset ? Number(s.daysOffset) : (idx + 1) * 12;
-        const targetDate = s.targetDate
-          ? new Date(s.targetDate)
-          : new Date(new Date(project.startDate).getTime() + offset * 24 * 60 * 60 * 1000);
-
-        return {
-          projectId: project.projectId,
-          title: s.title || s.stageName,
-          stage: s.stage || s.stageCode || 'CUSTOM_STAGE',
-          stageCode: s.stageCode || s.stage || 'CUSTOM_STAGE',
-          order: s.order ? Number(s.order) : idx + 1,
-          leadRole: s.leadRole || 'Project Manager',
-          weightPercent: s.weightPercent ? Number(s.weightPercent) : 10,
-          baselineDate: targetDate,
-          projectedDate: targetDate,
-          status: idx === 0 ? 'IN_PROGRESS' : 'NOT_STARTED',
-          remarks: [
-            {
-              text: 'Stage initialized.',
-              authorName,
-              authorRole,
-              authorId: req.user?._id,
-              createdAt: new Date()
+      if (linkedLeadId && UUID_REGEX.test(String(linkedLeadId))) {
+        await prisma.lead.update({
+          where: { id: String(linkedLeadId) },
+          data: {
+            stage: 'IN_PRODUCTION',
+            convertedProjectId: project.projectId,
+            updatedById: req.user?.id || null,
+            updatedByName: actorName,
+            stageHistory: {
+              create: [
+                {
+                  fromStage: 'WON',
+                  toStage: 'IN_PRODUCTION',
+                  note: `Master Project ${project.projectId} (${project.workOrderNumber}) kicked off in Project Setup.`,
+                  createdById: req.user?.id || null,
+                  createdByName: actorName,
+                  updatedById: req.user?.id || null,
+                  updatedByName: actorName
+                }
+              ]
             }
-          ],
-          createdBy: req.user?._id,
-          updatedBy: req.user?._id
-        };
-      });
-    } else {
-      // Query Stage Master
-      const activeStageMasters = await StageMaster.find({ isActive: true }).sort({ defaultOrder: 1 });
-
-      if (activeStageMasters && activeStageMasters.length > 0) {
-        milestonesToCreate = activeStageMasters.map((sm, idx) => {
-          const targetDate = new Date(
-            new Date(project.startDate).getTime() + (sm.standardDaysOffset || (idx + 1) * 12) * 24 * 60 * 60 * 1000
-          );
-          return {
-            projectId: project.projectId,
-            title: sm.stageName,
-            stage: sm.stageCode,
-            stageCode: sm.stageCode,
-            order: sm.defaultOrder || idx + 1,
-            leadRole: sm.leadRole || 'Project Manager',
-            weightPercent: sm.weightPercent || 10,
-            baselineDate: targetDate,
-            projectedDate: targetDate,
-            status: idx === 0 ? 'IN_PROGRESS' : 'NOT_STARTED',
-            remarks: [
-              {
-                text: 'Stage initialized.',
-                authorName,
-                authorRole,
-                authorId: req.user?._id,
-                createdAt: new Date()
-              }
-            ],
-            createdBy: req.user?._id,
-            updatedBy: req.user?._id
-          };
-        });
-      } else {
-        // Fallback default stages
-        const defaultStages = [
-          { stage: 'PROJECT_SETUP', title: 'Project Kickoff & Charter Sign-off', daysOffset: 7, role: 'Project Manager' },
-          { stage: 'DESIGN_BOM', title: '3-Level Hierarchical BOM & CAD Freeze', daysOffset: 14, role: 'Lead Design Engineer' },
-          { stage: 'PROCUREMENT', title: 'BOM Net Demand Sourced & POs Released', daysOffset: 35, role: 'Purchase Officer' },
-          { stage: 'INCOMING_QC', title: 'Critical Inward Gate Inspection & QC Pass', daysOffset: 50, role: 'Quality Engineer' },
-          { stage: 'STORE_ALLOCATION', title: 'Hard Stock Allocation Locked to Project', daysOffset: 55, role: 'Store Manager' },
-          { stage: 'PRODUCTION_ASSEMBLY', title: 'Mechanical & Electrical Assembly Sign-off', daysOffset: 75, role: 'Production Engineer' },
-          { stage: 'MACHINE_TRIAL', title: 'Internal Dry/Wet Run Trial Passed (Zero Snags)', daysOffset: 85, role: 'Commissioning Engineer' },
-          { stage: 'DISPATCH_READY', title: 'Zero-Snag Block Verification & Dossier Sign-off', daysOffset: 90, role: 'Plant Head' }
-        ];
-
-        milestonesToCreate = defaultStages.map((s, idx) => {
-          const milestoneDate = new Date(new Date(project.startDate).getTime() + s.daysOffset * 24 * 60 * 60 * 1000);
-          return {
-            projectId: project.projectId,
-            title: s.title,
-            stage: s.stage,
-            stageCode: s.stage,
-            order: idx + 1,
-            leadRole: s.role,
-            weightPercent: 12.5,
-            baselineDate: milestoneDate,
-            projectedDate: milestoneDate,
-            status: idx === 0 ? 'IN_PROGRESS' : 'NOT_STARTED',
-            remarks: [
-              {
-                text: 'Stage initialized.',
-                authorName,
-                authorRole,
-                authorId: req.user?._id,
-                createdAt: new Date()
-              }
-            ],
-            createdBy: req.user?._id,
-            updatedBy: req.user?._id
-          };
-        });
+          }
+        }).catch(() => {});
       }
     }
 
-    if (milestonesToCreate.length > 0) {
-      await Milestone.insertMany(milestonesToCreate);
+    // Create ONLY the stages provided by the user (strictly zero default fallback or auto-seeding)
+    const stageTemplates = Array.isArray(stages) ? stages : [];
+    let createdMilestonesCount = 0;
+
+    for (let idx = 0; idx < stageTemplates.length; idx++) {
+      const s = stageTemplates[idx];
+      const stageCode = (s.stageCode || s.stage || 'CUSTOM_STAGE').toUpperCase();
+      const offsetDays = Number(s.daysOffset ?? s.standardDaysOffset ?? (idx + 1) * 12);
+      const targetDate = s.targetDate
+        ? new Date(s.targetDate)
+        : new Date(parsedStartDate.getTime() + offsetDays * 24 * 60 * 60 * 1000);
+
+      const stageMaster = await prisma.stageMaster.findFirst({
+        where: { stageCode }
+      });
+      const deptModule = s.departmentModule || stageMaster?.departmentModule || 'project-setup';
+
+      await prisma.milestone.create({
+        data: {
+          projectRefId: project.id,
+          projectId: project.projectId,
+          title: s.title || s.stageName || stageMaster?.title || stageCode,
+          stage: stageCode,
+          stageCode,
+          departmentModule: deptModule,
+          order: Number(s.order ?? s.defaultOrder ?? idx + 1),
+          leadRole: s.leadRole || stageMaster?.leadRole || 'Project Manager',
+          weightPercent: Number(s.weightPercent ?? stageMaster?.weightPercent ?? 10),
+          completionPercent: 0,
+          baselineDate: targetDate,
+          projectedDate: targetDate,
+          status: idx === 0 ? 'IN_PROGRESS' : 'NOT_STARTED',
+          notes: s.notes || '',
+          remarks: [
+            {
+              text: s.notes ? `Stage initialized: ${s.notes}` : 'Stage initialized on Project Kickoff.',
+              authorName: actorName,
+              authorRole: actorRole,
+              authorId: req.user?.id || null,
+              createdAt: new Date().toISOString()
+            }
+          ],
+          createdById: req.user?.id || null,
+          createdByName: actorName,
+          updatedById: req.user?.id || null,
+          updatedByName: actorName
+        }
+      });
+      createdMilestonesCount++;
     }
 
     await logAuditEvent({
       req,
       action: 'PROJECT_CREATED',
       module: 'project-setup',
-      entityId: project._id,
+      entityId: project.id,
       entityType: 'Project',
-      notes: `Master Project Spine minted: ${project.projectId} (${project.workOrderNumber}) for ${project.customerName}. Mode: ${creationMode || (customerPoId ? 'CUSTOMER_PO' : 'DIRECT')}`
+      notes: `Master Project ${project.projectId} (${project.workOrderNumber}) created for ${project.customerName}`
+    });
+
+    const fullProject = await prisma.project.findUnique({
+      where: { id: project.id },
+      include: {
+        milestones: {
+          orderBy: { order: 'asc' },
+          include: { subStages: { orderBy: { order: 'asc' } } }
+        }
+      }
     });
 
     res.status(201).json({
       success: true,
-      message: 'Project and baseline schedule created successfully.',
-      project,
-      milestonesCount: milestonesToCreate.length
+      message: `All set! Master Project ${project.projectId} (${project.workOrderNumber}) created with ${createdMilestonesCount} department stages.`,
+      project: formatProject(fullProject),
+      milestonesCount: createdMilestonesCount
     });
   } catch (error) {
     next(error);
@@ -323,35 +449,248 @@ export const createProject = async (req, res, next) => {
 export const updateProjectStage = async (req, res, next) => {
   try {
     const { id } = req.params;
-    const { currentStage, status } = req.body;
+    const { currentStage, status, notes } = req.body;
+    const isUuid = UUID_REGEX.test(id);
 
-    const project = await Project.findOne({
-      $or: [{ _id: id.match(/^[0-9a-fA-F]{24}$/) ? id : null }, { projectId: id.toUpperCase() }]
+    const existing = await prisma.project.findFirst({
+      where: isUuid ? { id } : { projectId: id.toUpperCase() }
     });
-
-    if (!project) {
+    if (!existing) {
       return res.status(404).json({ success: false, message: 'Project not found.' });
     }
 
-    const previousStage = project.currentStage;
-    if (currentStage) project.currentStage = currentStage;
-    if (status) project.status = status;
-    project.updatedBy = req.user?._id;
+    const actorName = getActorName(req.user);
+    const actorRole = req.user?.role?.name || 'Project Manager';
 
-    await project.save();
+    const updated = await prisma.project.update({
+      where: { id: existing.id },
+      data: {
+        currentStage: currentStage ?? existing.currentStage,
+        status: status ?? existing.status,
+        notes: notes !== undefined ? notes : existing.notes,
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: 'Great! Project stage updated.',
+      project: formatProject(updated)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateProject = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const isUuid = UUID_REGEX.test(id);
+    const existing = await prisma.project.findFirst({
+      where: isUuid ? { id } : { projectId: id.toUpperCase() }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Project not found.' });
+    }
+
+    const actorName = getActorName(req.user);
+    const actorRole = req.user?.role?.name || 'Project Manager';
+    const {
+      projectName,
+      customerName,
+      machineModel,
+      productDescription,
+      deliveryCommitmentDate,
+      targetDispatchDate,
+      plantLocation,
+      contractValue,
+      status,
+      notes,
+      stages
+    } = req.body;
+
+    let resolvedContractValue = existing.contractValue;
+    if (contractValue && typeof contractValue === 'object') {
+      resolvedContractValue = {
+        currency: contractValue.currency || existing.contractValue?.currency || 'INR',
+        amount: Number(contractValue.amount ?? existing.contractValue?.amount ?? 0),
+        exchangeRate: Number(contractValue.exchangeRate ?? existing.contractValue?.exchangeRate ?? 1),
+        baseAmountINR: Math.round(Number(contractValue.amount || 0) * Number(contractValue.exchangeRate || 1) * 100) / 100
+      };
+    }
+
+    const updated = await prisma.project.update({
+      where: { id: existing.id },
+      data: {
+        projectName: projectName !== undefined ? String(projectName).trim() : existing.projectName,
+        customerName: customerName !== undefined ? String(customerName).trim() : existing.customerName,
+        machineModel: machineModel !== undefined ? String(machineModel).trim() : existing.machineModel,
+        productDescription: productDescription !== undefined ? String(productDescription).trim() : existing.productDescription,
+        deliveryCommitmentDate: deliveryCommitmentDate !== undefined ? (deliveryCommitmentDate ? new Date(deliveryCommitmentDate) : null) : existing.deliveryCommitmentDate,
+        targetDispatchDate: targetDispatchDate !== undefined ? (targetDispatchDate ? new Date(targetDispatchDate) : existing.targetDispatchDate) : existing.targetDispatchDate,
+        plantLocation: plantLocation !== undefined ? String(plantLocation).trim() : existing.plantLocation,
+        contractValue: resolvedContractValue,
+        status: status !== undefined ? String(status).trim() : existing.status,
+        notes: notes !== undefined ? String(notes).trim() : existing.notes,
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
+    });
+
+    if (Array.isArray(stages)) {
+      const currentMilestones = await prisma.milestone.findMany({
+        where: { projectId: existing.projectId }
+      });
+      const incomingCodes = new Set(
+        stages.map((s) => (s.stageCode || s.stage || '').toUpperCase()).filter(Boolean)
+      );
+
+      // Remove stages deleted by the user in edit mode
+      for (const cm of currentMilestones) {
+        if (!incomingCodes.has(cm.stageCode.toUpperCase())) {
+          await prisma.milestone.delete({ where: { id: cm.id } });
+        }
+      }
+
+      // Update existing stages or create newly added stages
+      for (let idx = 0; idx < stages.length; idx++) {
+        const s = stages[idx];
+        const stageCode = (s.stageCode || s.stage || '').toUpperCase();
+        if (!stageCode) continue;
+
+        const targetDate = s.targetDate ? new Date(s.targetDate) : new Date();
+        const existingMilestone = currentMilestones.find(
+          (cm) => cm.stageCode.toUpperCase() === stageCode
+        );
+
+        if (existingMilestone) {
+          await prisma.milestone.update({
+            where: { id: existingMilestone.id },
+            data: {
+              title: s.title || s.stageName || existingMilestone.title,
+              order: idx + 1,
+              leadRole: s.leadRole || existingMilestone.leadRole,
+              weightPercent: Number(s.weightPercent ?? existingMilestone.weightPercent),
+              notes: s.notes !== undefined ? String(s.notes).trim() : existingMilestone.notes,
+              baselineDate: s.targetDate ? new Date(s.targetDate) : existingMilestone.baselineDate,
+              projectedDate: s.targetDate ? new Date(s.targetDate) : existingMilestone.projectedDate,
+              status: s.status !== undefined ? String(s.status).trim() : existingMilestone.status,
+              updatedById: req.user?.id || null,
+              updatedByName: actorName
+            }
+          });
+        } else {
+          const stageMaster = await prisma.stageMaster.findFirst({ where: { stageCode } });
+          const deptModule = s.departmentModule || stageMaster?.departmentModule || 'project-setup';
+          await prisma.milestone.create({
+            data: {
+              projectRefId: existing.id,
+              projectId: existing.projectId,
+              title: s.title || s.stageName || stageMaster?.title || stageCode,
+              stage: stageCode,
+              stageCode,
+              departmentModule: deptModule,
+              order: idx + 1,
+              leadRole: s.leadRole || stageMaster?.leadRole || 'Project Manager',
+              weightPercent: Number(s.weightPercent ?? stageMaster?.weightPercent ?? 10),
+              completionPercent: 0,
+              baselineDate: targetDate,
+              projectedDate: targetDate,
+              status: s.status || 'NOT_STARTED',
+              notes: s.notes || '',
+              remarks: [
+                {
+                  text: s.notes ? `Stage added: ${s.notes}` : 'Stage added to Project.',
+                  authorName: actorName,
+                  authorRole: actorRole,
+                  authorId: req.user?.id || null,
+                  createdAt: new Date().toISOString()
+                }
+              ],
+              createdById: req.user?.id || null,
+              createdByName: actorName,
+              updatedById: req.user?.id || null,
+              updatedByName: actorName
+            }
+          });
+        }
+      }
+    }
 
     await logAuditEvent({
       req,
-      action: 'PROJECT_STAGE_UPDATED',
+      action: 'PROJECT_UPDATED',
       module: 'project-setup',
-      entityId: project._id,
+      entityId: updated.id,
       entityType: 'Project',
-      beforeData: { currentStage: previousStage },
-      afterData: { currentStage: project.currentStage, status: project.status },
-      notes: `Project ${project.projectId} transitioned from ${previousStage} to ${project.currentStage}`
+      notes: `Project ${updated.projectId} (${updated.workOrderNumber}) updated.`
     });
 
-    res.status(200).json({ success: true, message: `Project advanced to stage ${project.currentStage}.`, project });
+    const fullProject = await prisma.project.findUnique({
+      where: { id: updated.id },
+      include: {
+        milestones: {
+          orderBy: { order: 'asc' },
+          include: { subStages: { orderBy: { order: 'asc' } } }
+        }
+      }
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `All set! Project ${updated.workOrderNumber} updated successfully.`,
+      project: formatProject(fullProject)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const deleteProject = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const isUuid = UUID_REGEX.test(id);
+    const existing = await prisma.project.findFirst({
+      where: isUuid ? { id } : { projectId: id.toUpperCase() }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Project not found.' });
+    }
+
+    const actorName = getActorName(req.user);
+    const actorRole = req.user?.role?.name || 'Project Manager';
+
+    if (existing.customerPoId) {
+      await prisma.customerPo.update({
+        where: { id: existing.customerPoId },
+        data: {
+          status: 'RECEIVED',
+          convertedProjectId: null,
+          convertedAt: null,
+          updatedById: req.user?.id || null,
+          updatedByName: actorName
+        }
+      }).catch(() => {});
+    }
+
+    await prisma.project.delete({
+      where: { id: existing.id }
+    });
+
+    await logAuditEvent({
+      req,
+      action: 'PROJECT_DELETED',
+      module: 'project-setup',
+      entityId: existing.id,
+      entityType: 'Project',
+      notes: `Project ${existing.projectId} (${existing.workOrderNumber}) deleted.`
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `All set! Project ${existing.workOrderNumber} deleted successfully.`
+    });
   } catch (error) {
     next(error);
   }

@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   Layers,
   Sliders,
@@ -19,9 +21,22 @@ import BinLocationModal from './modals/BinLocationModal';
 
 type MasterSubTab = 'BINS' | 'CATEGORIES' | 'UOM_MATRIX' | 'SAFETY_STOCK';
 
-export default function StoreMasterTab() {
+export default function StoreMasterTab({
+  initialSubTab
+}: {
+  initialSubTab?: MasterSubTab;
+} = {}) {
   const dispatch = useAppDispatch();
-  const [activeSubTab, setActiveSubTab] = useState<MasterSubTab>('BINS');
+  const pathname = usePathname();
+  const activeSubTab: MasterSubTab =
+    initialSubTab ||
+    (pathname?.endsWith('/categories')
+      ? 'CATEGORIES'
+      : pathname?.endsWith('/uom-matrix')
+      ? 'UOM_MATRIX'
+      : pathname?.endsWith('/safety-stock')
+      ? 'SAFETY_STOCK'
+      : 'BINS');
   const [searchTerm, setSearchTerm] = useState('');
   const [isBinModalOpen, setIsBinModalOpen] = useState(false);
 
@@ -200,8 +215,8 @@ export default function StoreMasterTab() {
       <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-3">
         {/* Modern Button-Type Sub-Tabs */}
         <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto">
-          <button
-            onClick={() => setActiveSubTab('BINS')}
+          <Link
+            href="/store/master/bins"
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
               activeSubTab === 'BINS'
                 ? 'bg-orange-500 text-white shadow-xs'
@@ -210,10 +225,10 @@ export default function StoreMasterTab() {
           >
             <MapPin size={14} />
             Warehouse & Bins ({binLocations.length})
-          </button>
+          </Link>
 
-          <button
-            onClick={() => setActiveSubTab('CATEGORIES')}
+          <Link
+            href="/store/master/categories"
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
               activeSubTab === 'CATEGORIES'
                 ? 'bg-orange-500 text-white shadow-xs'
@@ -222,10 +237,10 @@ export default function StoreMasterTab() {
           >
             <Layers size={14} />
             Item Categories ({categories.length})
-          </button>
+          </Link>
 
-          <button
-            onClick={() => setActiveSubTab('UOM_MATRIX')}
+          <Link
+            href="/store/master/uom-matrix"
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
               activeSubTab === 'UOM_MATRIX'
                 ? 'bg-orange-500 text-white shadow-xs'
@@ -234,10 +249,10 @@ export default function StoreMasterTab() {
           >
             <Scale size={14} />
             UOM Matrix ({uomMatrix.length})
-          </button>
+          </Link>
 
-          <button
-            onClick={() => setActiveSubTab('SAFETY_STOCK')}
+          <Link
+            href="/store/master/safety-stock"
             className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all shrink-0 ${
               activeSubTab === 'SAFETY_STOCK'
                 ? 'bg-orange-500 text-white shadow-xs'
@@ -246,7 +261,7 @@ export default function StoreMasterTab() {
           >
             <ShieldAlert size={14} />
             Safety Stock & Reorder Rules
-          </button>
+          </Link>
         </div>
 
         {/* Action Button */}

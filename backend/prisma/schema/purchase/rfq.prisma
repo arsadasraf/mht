@@ -1,0 +1,52 @@
+model OutwardRfq {
+  id                 String   @id @default(uuid()) @db.Uuid
+  rfqNumber          String   @unique
+  projectId          String   @default("")
+  title              String
+  vendorCount        Int      @default(1)
+  itemCount          Int      @default(1)
+  submissionDeadline String   @default("")
+  status             String   @default("SENT")
+  items              Json     @default("[]")
+  vendors            Json     @default("[]")
+  notes              String   @default("")
+
+  // Universal Action Tracking
+  createdById        String?  @db.Uuid
+  createdByName      String   @default("")
+  updatedById        String?  @db.Uuid
+  updatedByName      String   @default("")
+  createdAt          DateTime @default(now())
+  updatedAt          DateTime @updatedAt
+
+  @@index([projectId])
+  @@map("purchase_outward_rfqs")
+}
+
+model InwardVendorQuotation {
+  id            String   @id @default(uuid()) @db.Uuid
+  quoteNumber   String   @unique
+  rfqNumber     String   @default("")
+  projectId     String   @default("")
+  vendorName    String
+  quotedAmount  Float    @default(0)
+  leadTimeDays  Int      @default(14)
+  paymentTerms  String   @default("30 Days")
+  status        String   @default("RECEIVED")
+  receivedDate  String   @default("")
+  items         Json     @default("[]")
+  notes         String   @default("")
+
+  // Universal Action Tracking
+  createdById   String?  @db.Uuid
+  createdByName String   @default("")
+  updatedById   String?  @db.Uuid
+  updatedByName String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([rfqNumber])
+  @@index([projectId])
+  @@map("purchase_inward_quotations")
+}
+

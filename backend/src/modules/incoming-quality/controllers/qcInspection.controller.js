@@ -1,28 +1,36 @@
-import { QcInspection } from '../models/qcInspection.model.js';
-import { GateEntry } from '../models/gateEntry.model.js';
-import { InventoryItem } from '../../store/models/inventoryItem.model.js';
-import { StockAllocation } from '../../store/models/stockAllocation.model.js';
+import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
+
+const getActorName = (user) => {
+  if (!user) return 'System';
+  return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || user.email || 'System';
+};
 
 export const getInspections = async (req, res, next) => {
   try {
     const { projectId, verdict, search } = req.query;
-    const query = {};
-    if (projectId) query.projectId = projectId.toUpperCase();
-    if (verdict) query.overallVerdict = verdict;
+    const where = {};
+    if (projectId) where.projectId = String(projectId).toUpperCase();
+    if (verdict) where.overallVerdict = String(verdict);
     if (search) {
-      query.$or = [
-        { inspectionNumber: { $regex: search, $options: 'i' } },
-        { poNumber: { $regex: search, $options: 'i' } },
-        { itemCode: { $regex: search, $options: 'i' } }
+      const q = String(search).trim();
+      where.OR = [
+        { inspectionNumber: { contains: q, mode: 'insensitive' } },
+        { poNumber: { contains: q, mode: 'insensitive' } },
+        { itemCode: { contains: q, mode: 'insensitive' } }
       ];
     }
 
-    const inspections = await QcInspection.find(query)
-      .populate('inspectedBy', 'firstName lastName')
-      .sort({ inspectedAt: -1 });
+    const inspections = await prisma.qcInspection.findMany({
+      where,
+      orderBy: { inspectedAt: 'desc' }
+    });
 
-    res.status(200).json({ success: true, count: inspections.length, inspections });
+    res.status(200).json({
+      success: true,
+      count: inspections.length,
+      inspections: inspections.map((i) => ({ ...i, _id: i.id }))
+    });
   } catch (error) {
     next(error);
   }
@@ -30,103 +38,141 @@ export const getInspections = async (req, res, next) => {
 
 export const createInspection = async (req, res, next) => {
   try {
-    const count = await QcInspection.countDocuments();
+    const count = await prisma.qcInspection.count();
     const inspectionNumber = `QC-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const actorName = getActorName(req.user);
 
     const {
       gateEntryId,
+      grnNumber = '',
       projectId,
       poNumber,
       itemCode,
       itemName,
-      receivedQty,
-      acceptedQty,
-      rejectedQty = { baseQty: 0, baseUom: 'NOS' },
-      reworkQty = { baseQty: 0, baseUom: 'NOS' },
-      overallVerdict,
+      receivedQty = { baseQty: 1, baseUom: 'Nos' },
+      acceptedQty = { baseQty: 1, baseUom: 'Nos' },
+      rejectedQty = { baseQty: 0, baseUom: 'Nos' },
+      reworkQty = { baseQty: 0, baseUom: 'Nos' },
+      overallVerdict = 'ACCEPTED',
       defects = [],
-      inspectorRemarks
+      inspectorRemarks = ''
     } = req.body;
 
-    const inspection = new QcInspection({
-      inspectionNumber,
-      gateEntryId,
-      projectId: projectId.toUpperCase(),
-      poNumber: poNumber.toUpperCase(),
-      itemCode: itemCode.toUpperCase(),
-      itemName,
-      receivedQty,
-      acceptedQty,
-      rejectedQty,
-      reworkQty,
-      overallVerdict,
-      defects,
-      inspectedBy: req.user?._id,
-      inspectedAt: new Date(),
-      inspectorRemarks,
-      createdBy: req.user?._id,
-      updatedBy: req.user?._id
+    const cleanPrj = String(projectId || 'PRJ-2026-1001').toUpperCase().trim();
+    const cleanPo = String(poNumber || 'PO-2026-0001').toUpperCase().trim();
+    const cleanCode = String(itemCode).toUpperCase().trim();
+
+    const inspection = await prisma.qcInspection.create({
+      data: {
+        inspectionNumber,
+        gateEntryId: gateEntryId || null,
+        grnNumber,
+        projectId: cleanPrj,
+        poNumber: cleanPo,
+        itemCode: cleanCode,
+        itemName: itemName || cleanCode,
+        receivedQty: typeof receivedQty === 'object' ? receivedQty : { baseQty: Number(receivedQty), baseUom: 'Nos' },
+        acceptedQty: typeof acceptedQty === 'object' ? acceptedQty : { baseQty: Number(acceptedQty), baseUom: 'Nos' },
+        rejectedQty: typeof rejectedQty === 'object' ? rejectedQty : { baseQty: Number(rejectedQty || 0), baseUom: 'Nos' },
+        reworkQty: typeof reworkQty === 'object' ? reworkQty : { baseQty: Number(reworkQty || 0), baseUom: 'Nos' },
+        overallVerdict,
+        defects: Array.isArray(defects) ? defects : [],
+        inspectorRemarks,
+        inspectedAt: new Date(),
+        createdById: req.user?.id || null,
+        createdByName: actorName,
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
     });
 
-    await inspection.save();
-
-    // Update GateEntry status
-    const gateEntry = await GateEntry.findById(gateEntryId);
-    if (gateEntry) {
-      gateEntry.status = overallVerdict === 'REJECTED_RTV' ? 'REJECTED_AT_GATE' : 'QC_CLEARED';
-      await gateEntry.save();
+    if (gateEntryId) {
+      await prisma.gateEntry.update({
+        where: { id: gateEntryId },
+        data: {
+          status: overallVerdict === 'REJECTED_RTV' ? 'REJECTED_AT_GATE' : 'QC_CLEARED',
+          updatedById: req.user?.id || null,
+          updatedByName: actorName
+        }
+      }).catch(() => null);
     }
 
-    // Update Store 4-Bucket Inventory: Add accepted qty to 'accepted' bucket
-    const accQty = Number(acceptedQty?.baseQty || 0);
+    if (grnNumber) {
+      await prisma.grnRecord.update({
+        where: { grnNumber },
+        data: {
+          qcStatus: overallVerdict === 'REJECTED_RTV' ? 'QC_REJECTED' : 'QC_ACCEPTED',
+          updatedById: req.user?.id || null,
+          updatedByName: actorName
+        }
+      }).catch(() => null);
+    }
+
+    const recQty = Number(receivedQty?.baseQty ?? receivedQty ?? 0);
+    const accQty = Number(acceptedQty?.baseQty ?? acceptedQty ?? 0);
+    const uom = String(acceptedQty?.baseUom || 'Nos').toUpperCase();
+
     if (accQty > 0) {
-      let invItem = await InventoryItem.findOne({ itemCode: itemCode.toUpperCase() });
-      if (!invItem) {
-        invItem = new InventoryItem({
-          itemCode: itemCode.toUpperCase(),
-          itemName,
-          baseUom: acceptedQty.baseUom || 'NOS',
-          buckets: { ordered: 0, inQc: 0, accepted: accQty, issued: 0 },
-          reservedQuantity: accQty, // Hard locked to project
-          createdBy: req.user?._id,
-          updatedBy: req.user?._id
+      const existingInv = await prisma.inventoryItem.findUnique({ where: { itemCode: cleanCode } });
+      if (!existingInv) {
+        await prisma.inventoryItem.create({
+          data: {
+            itemCode: cleanCode,
+            itemName: itemName || cleanCode,
+            baseUom: uom,
+            alternateUom: uom,
+            acceptedQty: accQty,
+            reservedQuantity: accQty,
+            createdById: req.user?.id || null,
+            createdByName: actorName,
+            updatedById: req.user?.id || null,
+            updatedByName: actorName
+          }
         });
       } else {
-        invItem.buckets.accepted = (invItem.buckets.accepted || 0) + accQty;
-        invItem.reservedQuantity = (invItem.reservedQuantity || 0) + accQty;
-        invItem.updatedBy = req.user?._id;
+        await prisma.inventoryItem.update({
+          where: { itemCode: cleanCode },
+          data: {
+            inQcQty: Math.max(0, (existingInv.inQcQty || 0) - recQty),
+            acceptedQty: (existingInv.acceptedQty || 0) + accQty,
+            reservedQuantity: (existingInv.reservedQuantity || 0) + accQty,
+            updatedById: req.user?.id || null,
+            updatedByName: actorName
+          }
+        });
       }
-      await invItem.save();
 
-      // Create hard allocation lock to target Project ID
-      const countAlloc = await StockAllocation.countDocuments();
-      const allocation = new StockAllocation({
-        allocationNumber: `ALC-${String(countAlloc + 1).padStart(4, '0')}`,
-        projectId: projectId.toUpperCase(),
-        itemCode: itemCode.toUpperCase(),
-        allocatedQty: accQty,
-        baseUom: acceptedQty.baseUom || 'NOS',
-        status: 'HARD_LOCKED',
-        allocatedBy: req.user?._id,
-        createdBy: req.user?._id,
-        updatedBy: req.user?._id
+      const countAlloc = await prisma.stockAllocation.count();
+      await prisma.stockAllocation.create({
+        data: {
+          allocationNumber: `ALC-${String(countAlloc + 1).padStart(4, '0')}`,
+          projectId: cleanPrj,
+          itemCode: cleanCode,
+          itemName: itemName || cleanCode,
+          allocatedQty: accQty,
+          baseUom: uom,
+          status: 'HARD_LOCKED',
+          createdById: req.user?.id || null,
+          createdByName: actorName,
+          updatedById: req.user?.id || null,
+          updatedByName: actorName
+        }
       });
-      await allocation.save();
     }
 
     await logAuditEvent({
       req,
       action: 'QC_INSPECTION_COMPLETED',
       module: 'incoming-quality',
-      entityId: inspection._id,
+      entityId: inspection.id,
       entityType: 'QcInspection',
-      notes: `QC ${inspectionNumber} completed for item ${itemCode}. Verdict: ${overallVerdict}, Accepted: ${accQty}`
+      notes: `QC ${inspectionNumber} completed for item ${cleanCode}. Verdict: ${overallVerdict}, Accepted: ${accQty}`
     });
 
     res.status(201).json({
       success: true,
-      message: 'QC inspection recorded and inventory allocation synchronized.',
-      inspection
+      message: `All set! QC inspection ${inspectionNumber} recorded and ${accQty} ${uom} hard-locked to ${cleanPrj}.`,
+      inspection: { ...inspection, _id: inspection.id }
     });
   } catch (error) {
     next(error);

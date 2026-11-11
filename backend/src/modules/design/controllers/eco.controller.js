@@ -1,20 +1,34 @@
-import { Eco } from '../models/eco.model.js';
-import { Bom } from '../models/bom.model.js';
+import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
+
+const getActorName = (user) => {
+  if (!user) return 'System';
+  return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || user.email || 'System';
+};
+
+const formatEco = (e) => ({
+  ...e,
+  _id: e.id,
+  affectedItemCodes: Array.isArray(e.affectedItemCodes) ? e.affectedItemCodes : []
+});
 
 export const getEcos = async (req, res, next) => {
   try {
     const { projectId, status } = req.query;
-    const query = {};
-    if (projectId) query.projectId = projectId.toUpperCase();
-    if (status) query.status = status;
+    const where = {};
+    if (projectId) where.projectId = String(projectId).toUpperCase();
+    if (status) where.status = String(status);
 
-    const ecos = await Eco.find(query)
-      .populate('approvedBy', 'firstName lastName')
-      .populate('createdBy', 'firstName lastName')
-      .sort({ createdAt: -1 });
+    const ecos = await prisma.eco.findMany({
+      where,
+      orderBy: { createdAt: 'desc' }
+    });
 
-    res.status(200).json({ success: true, count: ecos.length, ecos });
+    res.status(200).json({
+      success: true,
+      count: ecos.length,
+      ecos: ecos.map(formatEco)
+    });
   } catch (error) {
     next(error);
   }
@@ -22,34 +36,51 @@ export const getEcos = async (req, res, next) => {
 
 export const createEco = async (req, res, next) => {
   try {
-    const count = await Eco.countDocuments();
+    const count = await prisma.eco.count();
     const ecoNumber = `ECO-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
 
-    const { projectId, title, reasonForChange, changeType, affectedItemCodes = [] } = req.body;
+    const { projectId, title, reasonForChange, changeType = 'DESIGN_REVISION', affectedItemCodes = [] } = req.body;
+    if (!projectId || !title || !reasonForChange) {
+      return res.status(400).json({
+        success: false,
+        message: 'Project ID, Title, and Reason for Change are required.'
+      });
+    }
 
-    const eco = new Eco({
-      ecoNumber,
-      projectId: projectId.toUpperCase(),
-      title,
-      reasonForChange,
-      changeType,
-      affectedItemCodes: affectedItemCodes.map((c) => c.toUpperCase()),
-      createdBy: req.user?._id,
-      updatedBy: req.user?._id
+    const actorName = getActorName(req.user);
+    const cleanCodes = Array.isArray(affectedItemCodes)
+      ? affectedItemCodes.map((c) => String(c).toUpperCase().trim()).filter(Boolean)
+      : [];
+
+    const eco = await prisma.eco.create({
+      data: {
+        ecoNumber,
+        projectId: String(projectId).toUpperCase().trim(),
+        title: String(title).trim(),
+        reasonForChange: String(reasonForChange).trim(),
+        changeType,
+        affectedItemCodes: cleanCodes,
+        createdById: req.user?.id || null,
+        createdByName: actorName,
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
     });
-
-    await eco.save();
 
     await logAuditEvent({
       req,
       action: 'ECO_SUBMITTED',
       module: 'design',
-      entityId: eco._id,
+      entityId: eco.id,
       entityType: 'Eco',
-      notes: `ECO ${ecoNumber} submitted for project ${projectId}. Affected items: ${affectedItemCodes.join(', ')}`
+      notes: `ECO ${ecoNumber} submitted for project ${eco.projectId}. Affected items: ${cleanCodes.join(', ')}`
     });
 
-    res.status(201).json({ success: true, message: 'ECO submitted successfully.', eco });
+    res.status(201).json({
+      success: true,
+      message: `All set! ECO ${ecoNumber} submitted.`,
+      eco: formatEco(eco)
+    });
   } catch (error) {
     next(error);
   }
@@ -64,47 +95,68 @@ export const approveEcoAndFreeze = async (req, res, next) => {
     const { id } = req.params;
     const { approvalNotes } = req.body;
 
-    const eco = await Eco.findById(id);
-    if (!eco) {
+    const existing = await prisma.eco.findUnique({ where: { id } });
+    if (!existing) {
       return res.status(404).json({ success: false, message: 'ECO not found.' });
     }
 
-    eco.status = 'APPROVED_FREEZE';
-    eco.freezeActionTaken = true;
-    eco.approvedBy = req.user?._id;
-    eco.approvedAt = new Date();
-    eco.approvalNotes = approvalNotes || 'Approved. Automated freeze executed on affected items.';
-    eco.updatedBy = req.user?._id;
-
-    await eco.save();
+    const actorName = getActorName(req.user);
+    const affectedCodes = Array.isArray(existing.affectedItemCodes) ? existing.affectedItemCodes : [];
 
     // Execute automated freeze on target Project BOM
-    const bom = await Bom.findOne({ projectId: eco.projectId });
+    const bom = await prisma.bom.findUnique({ where: { projectId: existing.projectId } });
     let frozenCount = 0;
-    if (bom && bom.items) {
-      bom.items.forEach((item) => {
-        if (eco.affectedItemCodes.includes(item.itemCode)) {
-          item.ecoStatus = 'FROZEN_ECO';
-          item.ecoReference = eco.ecoNumber;
+
+    if (bom && Array.isArray(bom.items)) {
+      const updatedItems = bom.items.map((item) => {
+        if (affectedCodes.includes(String(item.itemCode).toUpperCase())) {
           frozenCount++;
+          return {
+            ...item,
+            ecoStatus: 'FROZEN_ECO',
+            ecoReference: existing.ecoNumber
+          };
+        }
+        return item;
+      });
+
+      await prisma.bom.update({
+        where: { id: bom.id },
+        data: {
+          items: updatedItems,
+          updatedById: req.user?.id || null,
+          updatedByName: actorName
         }
       });
-      await bom.save();
     }
+
+    const eco = await prisma.eco.update({
+      where: { id },
+      data: {
+        status: 'APPROVED_FREEZE',
+        freezeActionTaken: true,
+        approvedById: req.user?.id || null,
+        approvedByName: actorName,
+        approvedAt: new Date(),
+        approvalNotes: approvalNotes || 'Approved. Automated freeze executed on affected items.',
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
+    });
 
     await logAuditEvent({
       req,
       action: 'ECO_APPROVED_AND_FROZEN',
       module: 'design',
-      entityId: eco._id,
+      entityId: eco.id,
       entityType: 'Eco',
       notes: `ECO ${eco.ecoNumber} approved! Automated freeze enacted on ${frozenCount} BOM lines for project ${eco.projectId}`
     });
 
     res.status(200).json({
       success: true,
-      message: `ECO ${eco.ecoNumber} approved. Automated freeze successfully triggered on ${frozenCount} BOM line items.`,
-      eco,
+      message: `ECO ${eco.ecoNumber} approved. Automated freeze triggered on ${frozenCount} BOM line items.`,
+      eco: formatEco(eco),
       frozenItemsCount: frozenCount
     });
   } catch (error) {

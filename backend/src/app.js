@@ -10,21 +10,19 @@ import { sanitizeMiddleware } from './middleware/sanitize.middleware.js';
 import { ipWhitelistMiddleware } from './middleware/ipWhitelist.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
 
-// Active PostgreSQL + Prisma Module Routers (Phase 1: Auth & User Administration)
+// Active PostgreSQL + Prisma Module Routers
 import adminRoutes from './modules/admin/routes/index.js';
+import crmRoutes from './modules/crm/routes/index.js';
+import projectSetupRoutes from './modules/project-setup/routes/index.js';
+import designRoutes from './modules/design/routes/index.js';
+import purchaseRoutes from './modules/purchase/routes/index.js';
+import incomingQualityRoutes from './modules/incoming-quality/routes/index.js';
+import storeRoutes from './modules/store/routes/index.js';
+import productionTrialRoutes from './modules/production-trial/routes/index.js';
+import dispatchRoutes from './modules/dispatch/routes/index.js';
+import afterSalesRoutes from './modules/after-sales/routes/index.js';
 import masterRoutes from './modules/masters/routes/index.js';
 import s3Routes from './routes/s3.routes.js';
-
-// Pending PostgreSQL + Prisma Migration (Will be re-enabled module-by-module)
-// import crmRoutes from './modules/crm/routes/index.js';
-// import projectSetupRoutes from './modules/project-setup/routes/index.js';
-// import designRoutes from './modules/design/routes/index.js';
-// import purchaseRoutes from './modules/purchase/routes/index.js';
-// import incomingQualityRoutes from './modules/incoming-quality/routes/index.js';
-// import storeRoutes from './modules/store/routes/index.js';
-// import productionTrialRoutes from './modules/production-trial/routes/index.js';
-// import dispatchRoutes from './modules/dispatch/routes/index.js';
-// import afterSalesRoutes from './modules/after-sales/routes/index.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -75,23 +73,21 @@ app.get('/api/v1/health', (req, res) => {
   });
 });
 
-// Mount Active Modules
+// Mount Active Modules (All 10 Core Operational Modules on PostgreSQL + Prisma)
 app.use('/api/v1/admin', adminRoutes);
+app.use('/api/v1/crm', crmRoutes);
+app.use('/api/v1/project-setup', projectSetupRoutes);
+app.use('/api/v1/design', designRoutes);
+app.use('/api/v1/purchase', purchaseRoutes);
+app.use('/api/v1/quality', incomingQualityRoutes);
+app.use('/api/v1/incoming-quality', incomingQualityRoutes);
+app.use('/api/v1/store', storeRoutes);
+app.use('/api/v1/production-trial', productionTrialRoutes);
+app.use('/api/v1/dispatch', dispatchRoutes);
+app.use('/api/v1/after-sales', afterSalesRoutes);
 app.use('/api/v1/masters', masterRoutes);
 app.use('/api/masters', masterRoutes);
 app.use('/api/v1/s3', s3Routes);
-
-// Mounts to re-enable as each module is migrated to PostgreSQL + Prisma:
-// app.use('/api/v1/crm', crmRoutes);
-// app.use('/api/v1/project-setup', projectSetupRoutes);
-// app.use('/api/v1/design', designRoutes);
-// app.use('/api/v1/purchase', purchaseRoutes);
-// app.use('/api/v1/quality', incomingQualityRoutes);
-// app.use('/api/v1/incoming-quality', incomingQualityRoutes);
-// app.use('/api/v1/store', storeRoutes);
-// app.use('/api/v1/production-trial', productionTrialRoutes);
-// app.use('/api/v1/dispatch', dispatchRoutes);
-// app.use('/api/v1/after-sales', afterSalesRoutes);
 
 // Global Error Handling Middleware
 app.use(errorHandler);

@@ -3,7 +3,12 @@ import {
   getStageMasters,
   createStageMaster,
   updateStageMaster,
-  deleteStageMaster
+  deleteStageMaster,
+  getSubStageMasters,
+  createSubStageMaster,
+  updateSubStageMaster,
+  deleteSubStageMaster,
+  updateProjectSetupConfig
 } from '../controllers/stageMaster.controller.js';
 import { authenticate } from '../../../middleware/auth.middleware.js';
 
@@ -13,6 +18,11 @@ router.use(authenticate);
 
 router.get('/', getStageMasters);
 router.post('/', createStageMaster);
+router.put('/config', updateProjectSetupConfig);
+router.get('/sub-stages', getSubStageMasters);
+router.post('/sub-stages', createSubStageMaster);
+router.put('/sub-stages/:id', updateSubStageMaster);
+router.delete('/sub-stages/:id', deleteSubStageMaster);
 router.put('/:id', updateStageMaster);
 router.delete('/:id', deleteStageMaster);
 

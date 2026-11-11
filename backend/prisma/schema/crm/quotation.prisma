@@ -1,0 +1,83 @@
+model Quotation {
+  id                   String      @id @default(uuid()) @db.Uuid
+  quoteNumber          String      @unique
+  baseQuoteNumber      String
+  revisionNumber       Int         @default(0)
+  revisionCode         String      @default("R0")
+  isLatestRevision     Boolean     @default(true)
+  revisionNotes        String      @default("")
+
+  parentQuotationId    String?     @db.Uuid
+  parentQuotation      Quotation?  @relation("QuotationRevisions", fields: [parentQuotationId], references: [id], onDelete: SetNull)
+  revisions            Quotation[] @relation("QuotationRevisions")
+
+  leadId               String?     @db.Uuid
+  lead                 Lead?       @relation("LeadQuotations", fields: [leadId], references: [id], onDelete: SetNull)
+
+  customerName         String
+  companyName          String
+  contactEmail         String      @default("")
+  contactPhone         String      @default("")
+  billingAddress       String      @default("")
+  shippingAddress      String      @default("")
+  gstin                String      @default("")
+  machineModel         String      @default("")
+
+  items                Json        @default("[]")
+  subtotal             Json
+  taxRatePercent       Float       @default(18)
+  taxAmount            Json
+  totalAmount          Json
+
+  // PO-Style Commercial Pricing & Taxation Configuration
+  gstCategory                  String      @default("INTRA_STATE")
+  isGstIncluded                Boolean     @default(false)
+  packingType                  String      @default("INCLUDED")
+  packingValue                 Float       @default(0)
+  isPackingGstApplicable       Boolean     @default(true)
+  packingAmount                Json?
+  transportationType           String      @default("BUYER_ACTUALS")
+  transportationValue          Float       @default(0)
+  isTransportationGstApplicable Boolean    @default(true)
+  transportationAmount         Json?
+
+  termsAndConditions   Json?
+  bankDetails          Json?
+  signatory            Json?
+
+  currency             String      @default("INR")
+  exchangeRate         Float       @default(1.0)
+  validUntil           DateTime
+  paymentTerms         String      @default("50% Advance along with purchase order, 50% Before dispatch")
+  deliveryWeeks        Int         @default(8)
+  warrantyMonths       Int         @default(12)
+  notes                String      @default("")
+
+  // Snapshot of Company Branding & PDF Header/Footer/Logos at the time of Quotation Revision
+  companySnapshot      Json?
+
+  status               String      @default("SENT_TO_CLIENT")
+  isLocked             Boolean     @default(false)
+  poDetails            Json?
+  convertedProjectId   String?
+  convertedAt          DateTime?
+
+  // Universal Action Tracking
+  createdById          String?     @db.Uuid
+  createdBy            User?       @relation("QuotationCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByName        String      @default("")
+
+  updatedById          String?     @db.Uuid
+  updatedBy            User?       @relation("QuotationUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedByName        String      @default("")
+
+  createdAt            DateTime    @default(now())
+  updatedAt            DateTime    @updatedAt
+
+  @@index([baseQuoteNumber, revisionNumber])
+  @@index([quoteNumber])
+  @@index([leadId])
+  @@index([status])
+  @@map("crm_quotations")
+}
+

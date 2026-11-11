@@ -1,15 +1,29 @@
-import { StockAllocation } from '../models/stockAllocation.model.js';
-import { InventoryItem } from '../models/inventoryItem.model.js';
+import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
+
+const getActorName = (user) => {
+  if (!user) return 'System';
+  return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || user.email || 'System';
+};
+
+const formatAllocation = (a) => ({
+  ...a,
+  _id: a.id
+});
 
 export const getAllocationsByProject = async (req, res, next) => {
   try {
     const { projectId } = req.params;
-    const allocations = await StockAllocation.find({ projectId: projectId.toUpperCase() })
-      .populate('managerialApprovalBy', 'firstName lastName')
-      .sort({ createdAt: -1 });
+    const allocations = await prisma.stockAllocation.findMany({
+      where: { projectId: String(projectId).toUpperCase() },
+      orderBy: { createdAt: 'desc' }
+    });
 
-    res.status(200).json({ success: true, count: allocations.length, allocations });
+    res.status(200).json({
+      success: true,
+      count: allocations.length,
+      allocations: allocations.map(formatAllocation)
+    });
   } catch (error) {
     next(error);
   }
@@ -18,31 +32,32 @@ export const getAllocationsByProject = async (req, res, next) => {
 export const getAllocations = async (req, res, next) => {
   try {
     const { projectId, status } = req.query;
-    const query = {};
-    if (projectId) query.projectId = projectId.toUpperCase();
-    if (status) query.status = status;
+    const where = {};
+    if (projectId) where.projectId = String(projectId).toUpperCase();
+    if (status) where.status = String(status);
 
-    const allocations = await StockAllocation.find(query)
-      .populate('managerialApprovalBy', 'firstName lastName')
-      .populate('allocatedBy', 'firstName lastName')
-      .sort({ createdAt: -1 });
+    const allocations = await prisma.stockAllocation.findMany({
+      where,
+      orderBy: { createdAt: 'desc' }
+    });
 
-    res.status(200).json({ success: true, count: allocations.length, allocations });
+    res.status(200).json({
+      success: true,
+      count: allocations.length,
+      allocations: allocations.map(formatAllocation)
+    });
   } catch (error) {
     next(error);
   }
 };
 
-/**
- * Request Inter-Project Material Transfer:
- * An allocation hard-locked to Project A cannot be used by Project B without explicit Managerial Transfer Approval.
- */
 export const requestTransfer = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { targetProjectId, justification } = req.body;
+    const actorName = getActorName(req.user);
 
-    const allocation = await StockAllocation.findById(id);
+    const allocation = await prisma.stockAllocation.findUnique({ where: { id } });
     if (!allocation) {
       return res.status(404).json({ success: false, message: 'Stock allocation not found.' });
     }
@@ -54,97 +69,86 @@ export const requestTransfer = async (req, res, next) => {
       });
     }
 
-    allocation.status = 'TRANSFER_REQUESTED';
-    allocation.transferRequestedToProject = targetProjectId.toUpperCase();
-    allocation.updatedBy = req.user?._id;
-    await allocation.save();
+    const updated = await prisma.stockAllocation.update({
+      where: { id },
+      data: {
+        status: 'TRANSFER_REQUESTED',
+        transferRequestedToProject: String(targetProjectId).toUpperCase().trim(),
+        managerialApprovalNotes: justification || '',
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
+    });
 
     await logAuditEvent({
       req,
       action: 'STOCK_TRANSFER_REQUESTED',
       module: 'store',
-      entityId: allocation._id,
+      entityId: updated.id,
       entityType: 'StockAllocation',
-      notes: `Transfer requested for ${allocation.allocatedQty} ${allocation.baseUom} of ${allocation.itemCode} from ${allocation.projectId} to ${targetProjectId}. Justification: ${justification}`
+      notes: `Transfer requested for ${updated.allocatedQty} ${updated.baseUom} of ${updated.itemCode} from ${updated.projectId} to ${targetProjectId}.`
     });
 
     res.status(200).json({
       success: true,
       message: `Transfer request submitted for managerial approval to divert stock to ${targetProjectId}.`,
-      allocation
+      allocation: formatAllocation(updated)
     });
   } catch (error) {
     next(error);
   }
 };
 
-/**
- * Managerial Transfer Approval:
- * Only authorized plant managers can approve diversion of hard-allocated stock between projects.
- */
 export const approveTransfer = async (req, res, next) => {
   try {
     const { id } = req.params;
     const { approved, notes } = req.body;
+    const actorName = getActorName(req.user);
 
-    const allocation = await StockAllocation.findById(id);
+    const allocation = await prisma.stockAllocation.findUnique({ where: { id } });
     if (!allocation) {
       return res.status(404).json({ success: false, message: 'Stock allocation not found.' });
-    }
-
-    if (allocation.status !== 'TRANSFER_REQUESTED') {
-      return res.status(400).json({
-        success: false,
-        message: 'No pending transfer request on this allocation.'
-      });
     }
 
     const sourceProject = allocation.projectId;
     const destinationProject = allocation.transferRequestedToProject;
 
     if (approved) {
-      allocation.status = 'TRANSFERRED';
-      allocation.projectId = destinationProject; // Reassign hard allocation
-      allocation.transferRequestedToProject = null;
-      allocation.managerialApprovalBy = req.user?._id;
-      allocation.managerialApprovalNotes = notes || 'Managerial transfer approved.';
-      allocation.updatedBy = req.user?._id;
-      await allocation.save();
-
-      await logAuditEvent({
-        req,
-        action: 'STOCK_TRANSFER_APPROVED',
-        module: 'store',
-        entityId: allocation._id,
-        entityType: 'StockAllocation',
-        notes: `Managerial approval granted: ${allocation.allocatedQty} ${allocation.baseUom} of ${allocation.itemCode} transferred from ${sourceProject} to ${destinationProject}.`
+      const updated = await prisma.stockAllocation.update({
+        where: { id },
+        data: {
+          status: 'HARD_LOCKED',
+          projectId: destinationProject || sourceProject,
+          transferRequestedToProject: null,
+          managerialApprovalById: req.user?.id || null,
+          managerialApprovalByName: actorName,
+          managerialApprovalNotes: notes || 'Managerial transfer approved.',
+          updatedById: req.user?.id || null,
+          updatedByName: actorName
+        }
       });
 
       res.status(200).json({
         success: true,
-        message: `Stock successfully transferred and hard-locked to ${destinationProject}.`,
-        allocation
+        message: `Stock transferred and hard-locked to ${updated.projectId}.`,
+        allocation: formatAllocation(updated)
       });
     } else {
-      allocation.status = 'HARD_LOCKED';
-      allocation.transferRequestedToProject = null;
-      allocation.managerialApprovalNotes = notes || 'Transfer request rejected by manager.';
-      allocation.updatedBy = req.user?._id;
-      await allocation.save();
-
-      await logAuditEvent({
-        req,
-        action: 'STOCK_TRANSFER_REJECTED',
-        module: 'store',
-        entityId: allocation._id,
-        entityType: 'StockAllocation',
-        notes: `Stock transfer request from ${sourceProject} to ${destinationProject} rejected.`
+      const updated = await prisma.stockAllocation.update({
+        where: { id },
+        data: {
+          status: 'HARD_LOCKED',
+          transferRequestedToProject: null,
+          managerialApprovalNotes: notes || 'Transfer request rejected by manager.',
+          updatedById: req.user?.id || null,
+          updatedByName: actorName
+        }
       });
 
       res.status(200).json({
         success: true,
         message: `Transfer rejected. Stock remains hard-locked to ${sourceProject}.`,
-        allocation
+        allocation: formatAllocation(updated)
       });
     }
   } catch (error) {

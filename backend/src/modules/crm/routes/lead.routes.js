@@ -5,6 +5,7 @@ import {
   createLead,
   updateLead,
   updateLeadStage,
+  addLeadFollowUpNote,
   bulkImportLeads,
   deleteLead
 } from '../controllers/lead.controller.js';
@@ -20,6 +21,7 @@ router.get('/', getLeads);
 router.post('/', createLead);
 router.post('/bulk-import', bulkImportLeads);
 router.patch('/:id/stage', updateLeadStage);
+router.post('/:id/notes', addLeadFollowUpNote);
 router.put('/:id', updateLead);
 router.delete('/:id', deleteLead);
 

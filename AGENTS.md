@@ -4,7 +4,7 @@
 > **System Scope:** Engineer-to-Order (ETO) Manufacturing Execution & Resource Planning System  
 > **Workspace Root:** `f:/mht`  
 > **Frontend Directory:** `f:/mht/frontend` (Next.js, Redux Toolkit, RTK Query)  
-> **Backend Directory:** `f:/mht/backend` (Express.js, MongoDB / Mongoose, AWS S3)
+> **Backend Directory:** `f:/mht/backend` (Express.js, PostgreSQL / Prisma ORM, Zod, AWS S3)
 
 ---
 
@@ -46,18 +46,44 @@ The entire user interface and user experience across the Landing Page (`/`), ERP
       * *Info:* *"Copied to clipboard!"*
     * **Zero Native Browser Popups:** Strictly NO raw `window.confirm()` or `window.alert()`. All confirmations MUST use a unified, friendly MH Confirmation Dialog component with conversational phrasing and clear, friendly buttons (*"Keep it"* vs *"Yes, delete"*).
     * **Single Floating Toast Standard:** Fixed bottom-right (`fixed bottom-6 right-6 z-50`), rounded-xl, shadow-2xl, auto-dismiss 4.5s, with 4 standardized color states (Emerald for Success, Crimson for Error, Amber for Notice, Slate for Info).
-  * **Mandatory Exact Excel-Style Table Header Filters Standard:**
-    Whenever an "Excel style filter" or "Excel filter" is requested for any table across the application, it MUST be implemented according to the standardized `ExcelColumnFilter` architecture:
-    * **Header-Embedded Funnel Trigger (Zero Clunky Secondary Rows):** The filter trigger button (funnel icon `Filter`) MUST be embedded directly inside each table header cell (`<th className="...">`), sitting inline next to the column title. Strictly NO secondary rows of text inputs (`<input>`) or dropdown selects (`<select>`) below the header that waste vertical screen space.
-    * **Floating Excel-Style Popover Dialog:** Clicking the header filter trigger opens a floating popover (`w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50`) containing:
-      1. **Sorting Controls:** One-click "Sort A to Z (Ascending)" and "Sort Z to A (Descending)" buttons with active checkmark indicators.
-      2. **Live In-Popover Search:** Instant search input (`Search values...`) with clear button to quickly filter down distinct value lists.
-      3. **(Select All) Toggle:** Checkbox toggle that selects or deselects all currently visible values.
-      4. **Distinct Values Checklist with Counts:** Scrollable checklist displaying every unique value present in the dataset along with its frequency count (e.g. `[✓] Maharashtra (12)`).
-      5. **Footer Action Buttons:** Clean `Clear Filter` and Safety Orange `Apply` buttons.
-    * **Safety Orange Visual Filter State:** When a column filter is actively applied, its header funnel button illuminates in Safety Orange (`bg-orange-500 text-white shadow-xs`) with a filled icon. When sorting alone is applied, it reflects an active slate state.
-    * **Global "Reset Filters" Toolbar Button:** When any column filter or global search is active, the table toolbar displays a compact Safety Orange button (`Reset Filters` with `RotateCcw` icon) to clear all active column filters and search inputs in a single click.
+  * **Mandatory Universal Table Architecture (Dedicated Search Bar on Left, Add New Button on Right, Column-Based Excel Filters on Relevant Columns Only):**
+    Every data table across the ENTIRE application MUST strictly follow the standardized table architecture:
+    * **Top Dedicated In-Line Table Toolbar:** Every table MUST have its own dedicated toolbar sitting immediately above it:
+      * **Left Side:** Dedicated In-Line Search Bar with search icon, instant search filtering, and clear (`X`) button.
+      * **Right Side:** Primary "Add New" button (e.g. `Add RM Item`, `Add Customer`, `Add BO Item`) in Safety Orange (`bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-xl`), alongside a compact "Reset Filters" button (`RotateCcw` icon) that automatically appears whenever any column filter or search term is active.
+    * **Column-Based Excel-Style Header Filters (`ExcelColumnFilter`):** Every data column with distinct values or sorting needs (e.g. Item Name, Code, Make, Category, UOM, HSN, Status, Location) MUST feature a header-embedded Excel column filter popover (`ExcelColumnFilter`):
+      * **Header-Embedded Funnel Trigger (Zero Clunky Secondary Rows):** The filter trigger button (funnel icon `Filter`) MUST be embedded directly inside each table header cell (`<th className="...">`), sitting inline next to the column title. Strictly NO secondary rows of text inputs (`<input>`) or dropdown selects (`<select>`) below the header that waste vertical screen space.
+      * **Floating Excel-Style Popover Dialog:** Clicking the header filter trigger opens a floating popover (`w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50`) containing:
+        1. **Sorting Controls:** One-click "Sort A to Z (Ascending)" and "Sort Z to A (Descending)" buttons with active checkmark indicators.
+        2. **Live In-Popover Search:** Instant search input (`Search values...`) with clear button to quickly filter down distinct value lists.
+        3. **(Select All) Toggle:** Checkbox toggle that selects or deselects all currently visible values.
+        4. **Distinct Values Checklist with Counts:** Scrollable checklist displaying every unique value present in the dataset along with its frequency count (e.g. `[✓] Tata Steel (3)`).
+        5. **Footer Action Buttons:** Clean `Clear Filter` and Safety Orange `Apply` buttons.
+      * **Safety Orange Visual Filter State:** When a column filter is actively applied, its header funnel button illuminates in Safety Orange (`bg-orange-500 text-white shadow-xs`) with a filled icon. When sorting alone is applied, it reflects an active slate state.
+    * **Clean Plain Headers for Non-Filter Columns (Zero Unneeded Filter Icons):** Columns where filtering is not needed (such as `#` serial row numbers, row action buttons/icons, or purely decorative columns) MUST have clean, plain headers without any filter funnel icon.
+    * **Strictly Zero Duplicate Header Titles (Use `ExcelColumnFilter` Alone — Zero Extra `<span>Title</span>` in Filter Headers):** The `<ExcelColumnFilter title="Column Name" ... />` component already encapsulates and renders both the column title text (`title`) and the filter funnel trigger button internally. Therefore, inside any filterable table header cell (`<th className="...">`), you MUST place `<ExcelColumnFilter ... />` directly by itself. Strictly NEVER wrap or prefix it with an extra `<span>Column Name</span>` or outer `<div>` containing the title again (e.g. NEVER do `<div><span>Project ID</span><ExcelColumnFilter title="Project ID" /></div>`). Doing so causes unsightly duplicate column titles on screen. For non-filter columns (such as `#`, row actions, progress bars), render clean plain text headers (e.g. `<th className="...">#</th>`).
     * **Shared Component Reference:** Always utilize or reference the shared component at `frontend/src/components/ui/ExcelColumnFilter.tsx`.
+  * **Mandatory Clickable Row Preview & Complete Audit Trail Standard:**
+    Across the ENTIRE application, every data table MUST support an interactive **Clickable Row Preview**:
+    * **Clickable Row Identifier:** Clicking on the primary entity identifier (e.g. Raw Material Name, Customer Name, Item Code, Work Order ID) or clicking an eye/preview action button (`Eye` icon) MUST open a high-density, informative **Preview Dossier / Modal**.
+    * **Standard Modal Sizing & Crisp White Ribbon:** Adheres to standard modal sizing tokens (`max-w-3xl lg:max-w-4xl` for items/records, `max-w-6xl xl:max-w-7xl` for master/expansive records) and strictly uses the **Crisp White Header with Amber/Yellow Top Accent Stripe** (`border-t-4 border-t-amber-400`), high-contrast dark slate typography, accent icon badge, and a direct "Edit" button to seamlessly jump into editing.
+    * **Comprehensive Details View:** Clean categorized view of all specifications, technical properties, categories, pricing, units, and active states.
+    * **Mandatory Universal Action Tracking / Audit Section:** Every preview dossier MUST feature a prominent dual-card audit trail display:
+      1. **Created By & Timestamp:** Creator's full name (`createdByName`), email/role, and exact creation timestamp (`createdAt` formatted in local date and time).
+      2. **Last Updated By & Timestamp:** Last updater's full name (`updatedByName`), email/role, and exact last updated timestamp (`updatedAt` formatted in local date and time).
+  * **Mandatory Item Attachments & S3 Subfolder Separation Standard (Photos & PDF Technical Documents):**
+    Across the ENTIRE application, items and masters that support media attachments (e.g. RM & BO Items, Machine Models, Tooling, QC Inspection Records) MUST adhere to strict S3 file/folder separation and unified preview behavior:
+    * **Dedicated S3 Folder Hierarchy:** Strictly NO flat or cluttered root uploads. Every file saved to S3 MUST be organized into dedicated semantic subfolders:
+      * **Photos / Images:** `<module>/items/photos/<item-slug>/<timestamp>_<clean-filename>`
+      * **Technical Documents / PDFs:** `<module>/items/documents/<item-slug>/<timestamp>_<clean-filename>`
+    * **Add/Edit Form Media Handlers:**
+      * **Item Photos:** Supports multiple image selection (`image/*`), immediate visual thumbnails for existing/new photos, and individual remove (`X`) buttons.
+      * **Technical PDF Datasheet:** Dedicated PDF document uploader with clear file badge, "Replace" option, and "Remove" action.
+    * **Clickable Preview Dossier Media Rendering:**
+      * **Photo Gallery:** If photos exist, render a clean multi-photo visual gallery with click-to-enlarge fullscreen modal (`ZoomIn`).
+      * **Technical PDF Document Card:** If a PDF exists, render a dedicated document card featuring two explicit action buttons:
+        1. **"See PDF"** (`<a target="_blank" rel="noopener noreferrer">` with `ExternalLink` icon) to open the document in a new browser tab.
+        2. **"Download PDF"** (`<a download="..." >` with `Download` icon) to instantly trigger direct file download.
 * **Primary Brand Accent (Safety Orange):** `#FF6A00` / `#FF7700` (`bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white`, `text-orange-600`, `border-orange-200`) — Used for primary CTAs, active indicators, milestone progress, and interactive highlights.
 * **Main Canvas Background:** `#F8FAFC` (`bg-slate-50`) — Crisp, glare-free, executive plant aesthetic. Zero dark mode.
 * **Elevated Surface / Cards / Header:** `#FFFFFF` (`bg-white`) with subtle slate borders (`border-slate-200`).
@@ -78,21 +104,26 @@ The entire user interface and user experience across the Landing Page (`/`), ERP
    * **Framework:** Next.js (App Router, React 19 / 18).
    * **Styling Framework:** **Tailwind CSS v3 (v3.4.x)** + PostCSS with configured brand colors, clean light surfaces, and utility classes.
    * **State & Data Fetching:** Redux Toolkit (`@reduxjs/toolkit`) + **RTK Query** for all server API endpoints, optimistic updates, and cache invalidation.
-   * **Mirrored Modular Sub-Folder Rule:**
+   * **Mirrored Modular Sub-Folder Rule & Mandatory Dedicated URL Route for Every Tab & Sub-Tab:**
      * Structured under `frontend/src/modules/<module-slug>/` with dedicated `components/`, `api/` (RTK Query), and `hooks/` sub-folders.
-     * Route pages map 1-to-1 in `src/app/(dashboard)/<module-slug>/<tab-slug>/page.jsx`.
+     * Route pages map 1-to-1 in `src/app/(dashboard)/<module-slug>/<tab-slug>/page.tsx` (and `src/app/(dashboard)/<module-slug>/<tab-slug>/<sub-tab-slug>/page.tsx` for nested sub-tabs).
+     * **Strictly Zero State-Only Tabs or Sub-Tabs (Especially in Masters):** Whenever any tab or sub-tab is created anywhere in the application—especially inside Master configurations across CRM, Project Setup, Design, Purchase, Store, Quality, Production, Dispatch, After Sales, and Admin—it MUST have its own dedicated URL route (e.g. `/crm/masters/products`, `/crm/masters/customers`, `/project-setup/masters/stages`, `/design/bom/masters`, `/purchase/masters/vendors`) using Next.js `<Link href="...">` navigation and conditional RTK Query `skip` flags so each sub-tab loads independently and fast, supports direct deep-linking, and integrates with URL route-based RBAC.
      * Each tab has its own separate UI component and separate RTK Query endpoint file, preventing UI file bloat and maximizing human readability.
    * **Strictly Zero Default Text-Based Information & Zero Dummy Data Everywhere:** All pages, tabs, modals, dialogs, cards, and forms must eliminate unnecessary explanatory prose, filler descriptions, and subtitles under headers. Page/modal headers contain ONLY the title and icon. KPI chips display ONLY the label and value (strictly zero filler commentary or subtext). Form inputs use concise labels and minimal placeholders. Strictly ZERO hardcoded dummy data (no fallback IDs like `'PRJ-2026-001'`). All data is loaded strictly from the API.
+   * **Strictly Zero In-Code Data Creation & Zero Auto-Seeding (Never Create Data From Code):**
+     * Backend controllers, routes, and services MUST NEVER automatically create, seed, or inject mock, sample, or "default" records into the database (strictly NO `if (count === 0) create(...)` and NO hardcoded `DEFAULT_*` data arrays in controllers).
+     * If a table is empty, the API must return an empty array `[]` with `count: 0`. The frontend must present a clean, minimal empty state with an actionable "Add New" button.
+     * All database records must originate exclusively from genuine user action in the UI, real API transactions, or official migrations—never fabricated or auto-inserted on the fly by application code.
    * **Desktop Sidebar Navigation (Un-numbered Lifecycle Order):** Modules follow the exact operational lifecycle sequence (Project Setup, CRM, Design, Purchase, Quality, Store, Production & Trial, Dispatch, After Sales, Admin), strictly without serial numbers (`1.`, `2.`, etc.).
    * **Mobile & Tablet Native UI (Sticky Bottom Tab Bar):** On mobile phones and portrait tablets, desktop horizontal tabs transform into a **sticky bottom icon navigation bar** (4 tabs + 'More (⋯)' slide-up sheet); top hamburger drawer switches between the 10 overarching modules; forms use slide-up bottom sheets; wide tables transform into touch cards.
 2. **Backend Architecture & Modular Sub-Folder Structure:**
    * **Runtime & Framework:** Node.js + Express.js.
-   * **Database:** MongoDB via Mongoose ORM.
+   * **Database & Validation:** PostgreSQL via Prisma ORM (`backend/prisma/schema/<module-slug>/<entity>.prisma` — strict **One Schema, One File** per module folder) + **Zod** schema validation (`backend/src/modules/<module-slug>/validators/`).
    * **Object Storage:** AWS S3 via AWS SDK v3 using secure, short-lived **Presigned URLs** for CAD drawings, QC photos, and dispatch documents (with local development mock fallback).
    * **Authentication:** **Universal Dual Mode** supporting Google OAuth 2.0 and Corporate Email/Password credentials with JWT HttpOnly cookies + Refresh token rotation.
    * **Strict Separation of Concerns & Clean File Structure Rule:**
-     * Organized under `backend/src/modules/<module-slug>/` with dedicated `controllers/`, `routes/`, and `models/` sub-folders.
-     * Each distinct feature, sub-domain, or tab within a module MUST have its own separate, dedicated controller file (e.g. `user.controller.js`, `role.controller.js`), route file (e.g. `user.routes.js`, `role.routes.js`), and model file (e.g. `user.model.js`, `role.model.js`).
+     * Organized under `backend/src/modules/<module-slug>/` with dedicated `controllers/`, `routes/`, and `validators/` sub-folders, and `backend/prisma/schema/<module-slug>/` for Prisma schemas.
+     * Each distinct feature, sub-domain, or tab within a module MUST have its own separate, dedicated controller file (e.g. `user.controller.js`, `role.controller.js`), route file (e.g. `user.routes.js`, `role.routes.js`), validator file (e.g. `customer.validator.js`), and Prisma schema file (e.g. `customer.prisma`).
      * Prevents monolithic file bloat; guarantees high human readability, isolated testing, and effortless maintenance.
 3. **Security, Governance & OWASP Top 10 Standards:**
    * **OWASP Top 10 Compliance:**
@@ -103,7 +134,7 @@ The entire user interface and user experience across the Landing Page (`/`), ERP
    * **IP & Location Restrictions:** Admin-configurable IP whitelisting and geo-fencing toggles per user/department.
    * **CAD Intellectual Property Protection:** View-only in-browser rendering with dynamic watermarking (User ID, Project ID, Timestamp); raw CAD downloads restricted to authorized Design Engineers.
    * **Strict User Deactivation Only:** Once created, a user account can NEVER be deleted from the database. Admins may only toggle active/deactivated status (`isActive: false`), instantly revoking access and preserving historical data integrity.
-   * **Universal Action Tracking:** Every operational database schema across all 10 modules tracks `createdBy`, `updatedBy`, `createdAt`, and `updatedAt`, logging who performed each action and when.
+   * **Universal Action Tracking (Mandatory in Schema & Backend by Default):** Every operational database schema and backend create/update transaction across all 10 modules MUST automatically capture and persist `createdAt`, `updatedAt`, `createdById` / `createdBy`, `createdByName`, `updatedById` / `updatedBy`, and `updatedByName` (recording both the relational user reference, the user's full name snapshot, and exact timestamps by default). On the frontend, these fields are available on every API payload and displayed selectively where decided (such as Preview Dossiers, Audit panels, or detail drawers).
    * **Account Lockout & Rate Limiting:** 15-minute account lockout after 5 consecutive failed login attempts; authentication endpoints capped at 10 requests/min per IP.
    * **Admin-Controlled Refresh Token Expiry:** Configured per-user during creation/editing in the Admin Panel (`/admin/users`), dynamically governing that user's session refresh lifespan (e.g. 8h for plant kiosks, 7d/30d for office staff).
    * **Immutable Audit Trail:** Append-only logging of all stage transitions, approvals, ECOs, stock movements, and access changes (tamper-proof for ISO compliance).

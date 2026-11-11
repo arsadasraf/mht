@@ -1,6 +1,8 @@
 'use client';
 
 import React, { useState } from 'react';
+import Link from 'next/link';
+import { usePathname } from 'next/navigation';
 import {
   Settings,
   ClipboardList,
@@ -48,10 +50,21 @@ interface InstrumentItem {
   status: 'CALIBRATED' | 'DUE_SOON' | 'EXPIRED';
 }
 
-export default function QualityMasterTab() {
-  const [activeSubTab, setActiveSubTab] = useState<
-    'checklists' | 'defects' | 'standards' | 'instruments'
-  >('checklists');
+export default function QualityMasterTab({
+  initialSubTab
+}: {
+  initialSubTab?: 'checklists' | 'defects' | 'standards' | 'instruments';
+} = {}) {
+  const pathname = usePathname();
+  const activeSubTab: 'checklists' | 'defects' | 'standards' | 'instruments' =
+    initialSubTab ||
+    (pathname?.endsWith('/defects')
+      ? 'defects'
+      : pathname?.endsWith('/standards')
+      ? 'standards'
+      : pathname?.endsWith('/instruments')
+      ? 'instruments'
+      : 'checklists');
 
   const [searchTerm, setSearchTerm] = useState('');
 
@@ -216,8 +229,8 @@ export default function QualityMasterTab() {
 
       {/* Button-Type Segmented Pill Sub-Tabs */}
       <div className="flex flex-wrap items-center gap-2 p-1.5 bg-slate-100 rounded-2xl w-fit border border-slate-200">
-        <button
-          onClick={() => setActiveSubTab('checklists')}
+        <Link
+          href="/quality/master/checklists"
           className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all ${
             activeSubTab === 'checklists'
               ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
@@ -226,10 +239,10 @@ export default function QualityMasterTab() {
         >
           <ClipboardList size={13} />
           <span>Checklists</span>
-        </button>
+        </Link>
 
-        <button
-          onClick={() => setActiveSubTab('defects')}
+        <Link
+          href="/quality/master/defects"
           className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all ${
             activeSubTab === 'defects'
               ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
@@ -238,10 +251,10 @@ export default function QualityMasterTab() {
         >
           <AlertTriangle size={13} />
           <span>Defect Codes</span>
-        </button>
+        </Link>
 
-        <button
-          onClick={() => setActiveSubTab('standards')}
+        <Link
+          href="/quality/master/standards"
           className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all ${
             activeSubTab === 'standards'
               ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
@@ -250,10 +263,10 @@ export default function QualityMasterTab() {
         >
           <Scale size={13} />
           <span>Acceptance Standards</span>
-        </button>
+        </Link>
 
-        <button
-          onClick={() => setActiveSubTab('instruments')}
+        <Link
+          href="/quality/master/instruments"
           className={`flex items-center gap-1.5 px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all ${
             activeSubTab === 'instruments'
               ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
@@ -262,7 +275,7 @@ export default function QualityMasterTab() {
         >
           <Wrench size={13} />
           <span>Instruments</span>
-        </button>
+        </Link>
       </div>
 
       {/* Toolbar */}

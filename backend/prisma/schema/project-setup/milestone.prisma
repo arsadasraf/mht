@@ -1,0 +1,90 @@
+model Milestone {
+  id                   String            @id @default(uuid()) @db.Uuid
+  projectRefId         String?           @db.Uuid
+  project              Project?          @relation(fields: [projectRefId], references: [id], onDelete: Cascade)
+  projectId            String
+
+  title                String
+  stage                String            @default("CUSTOM_STAGE")
+  stageCode            String            @default("CUSTOM_STAGE")
+  departmentModule     String            @default("project-setup")
+  order                Int               @default(1)
+  leadRole             String            @default("Project Manager")
+
+  assignedToUserId     String?           @db.Uuid
+  assignedToUserName   String            @default("")
+  assignedToUserEmail  String            @default("")
+
+  weightPercent        Float             @default(10)
+  completionPercent    Float             @default(0)
+
+  baselineDate         DateTime
+  projectedDate        DateTime
+  actualCompletionDate DateTime?
+
+  status               String            @default("NOT_STARTED")
+  signOffById          String?           @db.Uuid
+  signOffByName        String            @default("")
+  signOffNotes         String            @default("")
+  notes                String            @default("")
+
+  remarks              Json              @default("[]")
+  subStages            ProjectSubStage[]
+
+  // Universal Action Tracking
+  createdById          String?           @db.Uuid
+  createdByName        String            @default("")
+  updatedById          String?           @db.Uuid
+  updatedByName        String            @default("")
+  createdAt            DateTime          @default(now())
+  updatedAt            DateTime          @updatedAt
+
+  @@index([projectId])
+  @@index([stageCode])
+  @@index([departmentModule])
+  @@index([status])
+  @@map("project_milestones")
+}
+
+model ProjectSubStage {
+  id                   String    @id @default(uuid()) @db.Uuid
+  milestoneId          String    @db.Uuid
+  milestone            Milestone @relation(fields: [milestoneId], references: [id], onDelete: Cascade)
+
+  projectId            String
+  departmentModule     String    @default("design")
+  subStageCode         String
+  title                String
+  order                Int       @default(1)
+
+  assignedToUserId     String?   @db.Uuid
+  assignedToUserName   String    @default("")
+  assignedToUserEmail  String    @default("")
+
+  baselineStartDate    DateTime  @default(now())
+  targetEndDate        DateTime  @default(now())
+  actualCompletionDate DateTime?
+
+  status               String    @default("NOT_STARTED")
+  completionPercent    Float     @default(0)
+  remarks              Json      @default("[]")
+
+  estimatedHours       Float     @default(0)
+  actualHours          Float     @default(0)
+  priority             String    @default("MEDIUM")
+
+  // Universal Action Tracking
+  createdById          String?   @db.Uuid
+  createdByName        String    @default("")
+  updatedById          String?   @db.Uuid
+  updatedByName        String    @default("")
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([milestoneId])
+  @@index([projectId])
+  @@index([departmentModule])
+  @@index([assignedToUserId])
+  @@map("project_sub_stages")
+}
+

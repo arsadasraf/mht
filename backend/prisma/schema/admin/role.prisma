@@ -1,0 +1,25 @@
+model Role {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @unique
+  slug          String   @unique
+  description   String?
+  allowedRoutes String[] @default([])
+  isSystemRole  Boolean  @default(false)
+
+  users         User[]   @relation("UserRole")
+
+  // Universal Action Tracking (Who Created & Who Updated Last)
+  createdById   String?  @db.Uuid
+  createdBy     User?    @relation("RoleCreatedBy", fields: [createdById], references: [id], onDelete: SetNull)
+  createdByName String   @default("")
+
+  updatedById   String?  @db.Uuid
+  updatedBy     User?    @relation("RoleUpdatedBy", fields: [updatedById], references: [id], onDelete: SetNull)
+  updatedByName String   @default("")
+
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@map("roles")
+}
+

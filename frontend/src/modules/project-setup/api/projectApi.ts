@@ -13,6 +13,10 @@ export const projectApi = apiSlice.injectEndpoints({
       query: () => '/project-setup/projects/available-customer-pos',
       providesTags: ['CustomerPo', 'Project']
     }),
+    getDepartmentUsers: builder.query<{ success: boolean; users: any[] }, void>({
+      query: () => '/project-setup/projects/department-users',
+      providesTags: ['User']
+    }),
     getProjectById: builder.query<{ success: boolean; project: any; milestones: any[] }, string>({
       query: (id) => `/project-setup/projects/${id}`,
       providesTags: (result, error, id) => [{ type: 'Project', id }]
@@ -23,7 +27,22 @@ export const projectApi = apiSlice.injectEndpoints({
         method: 'POST',
         body
       }),
-      invalidatesTags: ['Project', 'Milestone', 'CustomerPo']
+      invalidatesTags: ['Project', 'Milestone', 'CustomerPo', 'Lead']
+    }),
+    updateProject: builder.mutation<{ success: boolean; message: string; project: any }, { id: string; [key: string]: any }>({
+      query: ({ id, ...body }) => ({
+        url: `/project-setup/projects/${id}`,
+        method: 'PUT',
+        body
+      }),
+      invalidatesTags: ['Project', 'Milestone', 'CustomerPo', 'Lead']
+    }),
+    deleteProject: builder.mutation<{ success: boolean; message: string }, string>({
+      query: (id) => ({
+        url: `/project-setup/projects/${id}`,
+        method: 'DELETE'
+      }),
+      invalidatesTags: ['Project', 'Milestone', 'CustomerPo', 'Lead']
     }),
     getMilestones: builder.query<{ success: boolean; count: number; milestones: any[] }, string>({
       query: (projectId) => `/project-setup/milestones/project/${projectId}`,
@@ -61,7 +80,40 @@ export const projectApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Milestone', 'Project']
     }),
-    getStageMasters: builder.query<{ success: boolean; count: number; stages: any[] }, { includeInactive?: boolean } | void>({
+    deleteMilestone: builder.mutation<{ success: boolean; message: string }, string>({
+      query: (id) => ({
+        url: `/project-setup/milestones/${id}`,
+        method: 'DELETE'
+      }),
+      invalidatesTags: ['Milestone', 'Project']
+    }),
+    addSubStageToMilestone: builder.mutation<any, { id: string; [key: string]: any }>({
+      query: ({ id, ...body }) => ({
+        url: `/project-setup/milestones/${id}/sub-stages`,
+        method: 'POST',
+        body
+      }),
+      invalidatesTags: ['Milestone', 'Project']
+    }),
+    updateSubStage: builder.mutation<any, { subStageId: string; [key: string]: any }>({
+      query: ({ subStageId, ...body }) => ({
+        url: `/project-setup/milestones/sub-stages/${subStageId}`,
+        method: 'PATCH',
+        body
+      }),
+      invalidatesTags: ['Milestone', 'Project']
+    }),
+    deleteSubStage: builder.mutation<any, string>({
+      query: (subStageId) => ({
+        url: `/project-setup/milestones/sub-stages/${subStageId}`,
+        method: 'DELETE'
+      }),
+      invalidatesTags: ['Milestone', 'Project']
+    }),
+    getStageMasters: builder.query<
+      { success: boolean; count: number; stages: any[]; subStages?: any[]; prefixLockPolicy?: any },
+      { includeInactive?: boolean; departmentModule?: string } | void
+    >({
       query: (params) => ({
         url: '/project-setup/stage-masters',
         params: params || undefined
@@ -90,6 +142,44 @@ export const projectApi = apiSlice.injectEndpoints({
         method: 'DELETE'
       }),
       invalidatesTags: ['StageMaster']
+    }),
+    getSubStageMasters: builder.query<{ success: boolean; count: number; subStages: any[] }, { departmentModule?: string; parentStageCode?: string } | void>({
+      query: (params) => ({
+        url: '/project-setup/stage-masters/sub-stages',
+        params: params || undefined
+      }),
+      providesTags: ['StageMaster']
+    }),
+    createSubStageMaster: builder.mutation<any, any>({
+      query: (body) => ({
+        url: '/project-setup/stage-masters/sub-stages',
+        method: 'POST',
+        body
+      }),
+      invalidatesTags: ['StageMaster']
+    }),
+    updateSubStageMaster: builder.mutation<any, { id: string; [key: string]: any }>({
+      query: ({ id, ...body }) => ({
+        url: `/project-setup/stage-masters/sub-stages/${id}`,
+        method: 'PUT',
+        body
+      }),
+      invalidatesTags: ['StageMaster']
+    }),
+    deleteSubStageMaster: builder.mutation<any, string>({
+      query: (id) => ({
+        url: `/project-setup/stage-masters/sub-stages/${id}`,
+        method: 'DELETE'
+      }),
+      invalidatesTags: ['StageMaster']
+    }),
+    updateProjectSetupConfig: builder.mutation<any, any>({
+      query: (body) => ({
+        url: '/project-setup/stage-masters/config',
+        method: 'PUT',
+        body
+      }),
+      invalidatesTags: ['StageMaster']
     })
   })
 });
@@ -97,15 +187,27 @@ export const projectApi = apiSlice.injectEndpoints({
 export const {
   useGetProjectsQuery,
   useGetAvailableCustomerPosQuery,
+  useGetDepartmentUsersQuery,
   useGetProjectByIdQuery,
   useCreateProjectMutation,
+  useUpdateProjectMutation,
+  useDeleteProjectMutation,
   useGetMilestonesQuery,
   useCreateProjectMilestoneMutation,
   useUpdateMilestoneStatusMutation,
   useAddMilestoneRemarkMutation,
   useUpdateMilestoneMutation,
+  useDeleteMilestoneMutation,
+  useAddSubStageToMilestoneMutation,
+  useUpdateSubStageMutation,
+  useDeleteSubStageMutation,
   useGetStageMastersQuery,
   useCreateStageMasterMutation,
   useUpdateStageMasterMutation,
-  useDeleteStageMasterMutation
+  useDeleteStageMasterMutation,
+  useGetSubStageMastersQuery,
+  useCreateSubStageMasterMutation,
+  useUpdateSubStageMasterMutation,
+  useDeleteSubStageMasterMutation,
+  useUpdateProjectSetupConfigMutation
 } = projectApi;

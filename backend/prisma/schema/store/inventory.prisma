@@ -1,0 +1,129 @@
+model InventoryItem {
+  id               String   @id @default(uuid()) @db.Uuid
+  itemCode         String   @unique
+  itemName         String
+  category         String   @default("BO") // RM, BO, COMPONENT, SUB_ASSEMBLY, ASSEMBLY, CONSUMABLE
+  baseUom          String   @default("Nos")
+  alternateUom     String   @default("Nos")
+  conversionRatio  Float    @default(1)
+  binLocation      String   @default("BIN-GEN-01")
+  minSafetyStock   Float    @default(0)
+
+  // 4-Bucket Inventory Ledger
+  orderedQty       Float    @default(0)
+  inQcQty          Float    @default(0)
+  acceptedQty      Float    @default(0)
+  issuedQty        Float    @default(0)
+  reservedQuantity Float    @default(0)
+
+  // Universal Action Tracking
+  createdById      String?  @db.Uuid
+  createdByName    String   @default("")
+  updatedById      String?  @db.Uuid
+  updatedByName    String   @default("")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([itemCode])
+  @@index([category])
+  @@map("store_inventory_items")
+}
+
+model StockAllocation {
+  id                         String   @id @default(uuid()) @db.Uuid
+  allocationNumber           String   @unique
+  projectId                  String
+  itemCode                   String
+  itemName                   String   @default("")
+  allocatedQty               Float    @default(0)
+  baseUom                    String   @default("Nos")
+  status                     String   @default("HARD_LOCKED") // HARD_LOCKED, TRANSFER_REQUESTED, TRANSFERRED, ISSUED_TO_PRODUCTION
+  transferRequestedToProject String?
+  managerialApprovalById     String?  @db.Uuid
+  managerialApprovalByName   String   @default("")
+  managerialApprovalNotes    String   @default("")
+
+  // Universal Action Tracking
+  createdById                String?  @db.Uuid
+  createdByName              String   @default("")
+  updatedById                String?  @db.Uuid
+  updatedByName              String   @default("")
+  createdAt                  DateTime @default(now())
+  updatedAt                  DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([itemCode])
+  @@map("store_stock_allocations")
+}
+
+model GrnRecord {
+  id            String   @id @default(uuid()) @db.Uuid
+  grnNumber     String   @unique
+  grnType       String   @default("BO") // RM, BO, COMPONENT, SUB_ASSEMBLY, ASSEMBLY, CONSUMABLE, FG
+  poNumber      String   @default("")
+  projectId     String   @default("")
+  vendorName    String   @default("")
+  invoiceNo     String   @default("")
+  binLocation   String   @default("BIN-QC-HOLD")
+  qcStatus      String   @default("PENDING_IQC") // PENDING_IQC, QC_ACCEPTED, QC_REJECTED
+  items         Json     @default("[]")
+  notes         String   @default("")
+
+  // Universal Action Tracking
+  createdById   String?  @db.Uuid
+  createdByName String   @default("")
+  updatedById   String?  @db.Uuid
+  updatedByName String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([poNumber])
+  @@map("store_grn_records")
+}
+
+model StoreMaterialRequest {
+  id            String   @id @default(uuid()) @db.Uuid
+  mrNumber      String   @unique
+  projectId     String
+  department    String   @default("PRODUCTION")
+  requestedBy   String   @default("")
+  status        String   @default("PENDING") // PENDING, ISSUED, PARTIAL
+  items         Json     @default("[]")
+  notes         String   @default("")
+
+  // Universal Action Tracking
+  createdById   String?  @db.Uuid
+  createdByName String   @default("")
+  updatedById   String?  @db.Uuid
+  updatedByName String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([projectId])
+  @@map("store_material_requests")
+}
+
+model StoreDeliveryChallan {
+  id            String   @id @default(uuid()) @db.Uuid
+  dcNumber      String   @unique
+  dcType        String   @default("RETURNABLE") // RETURNABLE, NON_RETURNABLE
+  projectId     String   @default("")
+  vendorName    String
+  purpose       String   @default("Job Work / Coating")
+  status        String   @default("DISPATCHED") // DISPATCHED, RETURNED
+  items         Json     @default("[]")
+  returnNotes   String   @default("")
+
+  // Universal Action Tracking
+  createdById   String?  @db.Uuid
+  createdByName String   @default("")
+  updatedById   String?  @db.Uuid
+  updatedByName String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([dcNumber])
+  @@map("store_delivery_challans")
+}
+

@@ -1,0 +1,55 @@
+model Project {
+  id                         String      @id @default(uuid()) @db.Uuid
+  projectId                  String      @unique
+  workOrderNumber            String      @unique
+  projectName                String
+  customerName               String
+  machineModel               String      @default("")
+
+  customerPoId               String?     @db.Uuid
+  customerPoNumber           String      @default("")
+  quotationRef               String      @default("")
+  productDescription         String      @default("")
+
+  contractValue              Json
+  startDate                  DateTime    @default(now())
+  targetDispatchDate         DateTime
+  deliveryCommitmentDate     DateTime?
+  actualDispatchDate         DateTime?
+
+  currentStage               String      @default("PROJECT_SETUP")
+  status                     String      @default("ACTIVE")
+  progressPercent            Float       @default(0)
+  plantLocation              String      @default("Main Works - Unit 1")
+
+  projectManagerId           String?     @db.Uuid
+  projectManagerName         String      @default("")
+  leadDesignEngineerId       String?     @db.Uuid
+  leadDesignEngineerName     String      @default("")
+  leadProductionEngineerId   String?     @db.Uuid
+  leadProductionEngineerName String      @default("")
+
+  attachedAssemblyId         String?
+  attachedAssemblyCode       String      @default("")
+  attachedAssemblyName       String      @default("")
+
+  isLocked                   Boolean     @default(false)
+  notes                      String      @default("")
+
+  milestones                 Milestone[]
+
+  // Universal Action Tracking
+  createdById                String?     @db.Uuid
+  createdByName              String      @default("")
+  updatedById                String?     @db.Uuid
+  updatedByName              String      @default("")
+  createdAt                  DateTime    @default(now())
+  updatedAt                  DateTime    @updatedAt
+
+  @@index([projectId])
+  @@index([workOrderNumber])
+  @@index([currentStage])
+  @@index([status])
+  @@map("projects")
+}
+

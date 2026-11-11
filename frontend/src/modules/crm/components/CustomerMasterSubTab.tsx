@@ -27,7 +27,9 @@ import {
   RotateCcw,
   FileSpreadsheet,
   Upload,
-  Users
+  Users,
+  Clock,
+  UserCheck
 } from 'lucide-react';
 import {
   useGetCustomersQuery,
@@ -214,7 +216,9 @@ export default function CustomerMasterSubTab() {
           c.primaryContact?.email?.toLowerCase().includes(q) ||
           c.primaryContact?.mobile?.includes(q) ||
           c.billingAddress?.city?.toLowerCase().includes(q) ||
-          c.billingAddress?.state?.toLowerCase().includes(q);
+          c.billingAddress?.state?.toLowerCase().includes(q) ||
+          c.briefAboutCustomerBusiness?.toLowerCase().includes(q) ||
+          c.anyOtherInformation?.toLowerCase().includes(q);
 
         if (!matchesGlobal) return false;
       }
@@ -297,6 +301,8 @@ export default function CustomerMasterSubTab() {
   const initialFormState = {
     customerCode: '',
     companyName: '',
+    briefAboutCustomerBusiness: '',
+    anyOtherInformation: '',
     currency: 'INR' as Customer['currency'],
     paymentTerms: '30% Advance, 60% Against Proforma, 10% Post Commissioning',
     creditPeriodDays: 30,
@@ -370,6 +376,8 @@ export default function CustomerMasterSubTab() {
     setFormData({
       customerCode: customer.customerCode || '',
       companyName: customer.companyName || '',
+      briefAboutCustomerBusiness: customer.briefAboutCustomerBusiness || '',
+      anyOtherInformation: customer.anyOtherInformation || '',
       currency: customer.currency || 'INR',
       paymentTerms: customer.paymentTerms || '30% Advance, 60% Against Proforma, 10% Post Commissioning',
       creditPeriodDays: customer.creditPeriodDays ?? 30,
@@ -575,6 +583,8 @@ export default function CustomerMasterSubTab() {
     const headers = [
       'Customer Code',
       'Company Name',
+      'Brief About Customer Business',
+      'Any Other Information',
       'Currency',
       'GSTIN',
       'PAN',
@@ -610,6 +620,8 @@ export default function CustomerMasterSubTab() {
     const rows = filteredCustomers.map(c => [
       `"${c.customerCode || ''}"`,
       `"${(c.companyName || '').replace(/"/g, '""')}"`,
+      `"${(c.briefAboutCustomerBusiness || '').replace(/"/g, '""')}"`,
+      `"${(c.anyOtherInformation || '').replace(/"/g, '""')}"`,
       `"${c.currency || 'INR'}"`,
       `"${c.gstin || ''}"`,
       `"${c.pan || ''}"`,
@@ -1113,25 +1125,20 @@ export default function CustomerMasterSubTab() {
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-6xl xl:max-w-7xl my-6 max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
             {/* Modal Header */}
-            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-center justify-between">
+            <div className="bg-white border-b border-slate-200 border-t-4 border-t-amber-400 px-6 py-4 flex items-center justify-between shrink-0 shadow-xs">
               <div className="flex items-center gap-2.5">
-                <div className="w-9 h-9 rounded-xl bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-700 border border-amber-300/40 flex items-center justify-center shrink-0">
                   <Building2 className="w-5 h-5" />
                 </div>
-                <div>
-                  <h3 className="text-base font-bold text-slate-900">
-                    {editingCustomerId ? 'Edit Customer Dossier' : 'Register New Enterprise Customer'}
-                  </h3>
-                  <p className="text-xs text-slate-500">
-                    Complete statutory address, contacts, bank details, and commercial terms
-                  </p>
-                </div>
+                <h3 className="text-slate-900 text-base font-extrabold tracking-tight">
+                  {editingCustomerId ? 'Edit Customer Dossier' : 'Register New Enterprise Customer'}
+                </h3>
               </div>
 
               <button
                 type="button"
                 onClick={() => setIsFormModalOpen(false)}
-                className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/80 rounded-xl transition-colors cursor-pointer"
+                className="text-slate-400 hover:text-slate-800 hover:bg-slate-100 p-1.5 rounded-xl transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -1155,7 +1162,7 @@ export default function CustomerMasterSubTab() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. CUST-1001"
+                      placeholder="CUST-1001"
                       value={formData.customerCode}
                       onChange={(e) => setFormData(p => ({ ...p, customerCode: e.target.value.toUpperCase() }))}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-mono font-semibold uppercase focus:ring-1 focus:ring-orange-500 focus:outline-hidden"
@@ -1168,11 +1175,37 @@ export default function CustomerMasterSubTab() {
                     </label>
                     <input
                       type="text"
-                      placeholder="e.g. Bharat Heavy Electricals Ltd / ABB India Ltd"
+                      placeholder="Company name"
                       required
                       value={formData.companyName}
                       onChange={(e) => setFormData(p => ({ ...p, companyName: e.target.value }))}
                       className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-semibold focus:ring-1 focus:ring-orange-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div className="sm:col-span-2">
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      Brief About Customer Business
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Brief about customer business"
+                      value={formData.briefAboutCustomerBusiness}
+                      onChange={(e) => setFormData(p => ({ ...p, briefAboutCustomerBusiness: e.target.value }))}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:ring-1 focus:ring-orange-500 focus:outline-hidden"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="block text-xs font-bold text-slate-800 mb-1">
+                      Any Other Information
+                    </label>
+                    <textarea
+                      rows={2}
+                      placeholder="Any other information"
+                      value={formData.anyOtherInformation}
+                      onChange={(e) => setFormData(p => ({ ...p, anyOtherInformation: e.target.value }))}
+                      className="w-full px-3 py-2 bg-white border border-slate-300 rounded-xl text-xs font-medium focus:ring-1 focus:ring-orange-500 focus:outline-hidden"
                     />
                   </div>
                 </div>
@@ -1923,25 +1956,19 @@ export default function CustomerMasterSubTab() {
       {isPreviewModalOpen && selectedCustomerForPreview && (
         <div className="fixed inset-0 z-50 bg-slate-900/60 backdrop-blur-xs flex items-center justify-center p-3 sm:p-5 overflow-y-auto">
           <div className="bg-white rounded-2xl border border-slate-200 shadow-2xl w-full max-w-6xl xl:max-w-7xl my-6 max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150">
-            {/* Header */}
-            <div className="px-6 py-4 border-b border-slate-200 bg-slate-50 flex items-start justify-between">
-              <div className="flex items-start gap-3">
-                <div className="w-12 h-12 rounded-2xl bg-orange-50 border border-orange-200 flex items-center justify-center text-orange-600 shrink-0 font-bold text-lg">
-                  {selectedCustomerForPreview.customerCode?.substring(0, 4)}
+            {/* Header (Crisp White Header with Industrial Amber/Yellow Top Accent Stripe) */}
+            <div className="bg-white border-b border-slate-200 border-t-4 border-t-amber-400 px-6 py-4 flex items-center justify-between shrink-0 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-700 border border-amber-300/40 flex items-center justify-center shrink-0 font-bold text-xs">
+                  <Building2 className="w-5 h-5" />
                 </div>
-                <div>
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="text-base sm:text-lg font-bold text-slate-900">
-                      {selectedCustomerForPreview.companyName}
-                    </h3>
-                    <span className="font-mono text-xs font-bold bg-slate-200 text-slate-800 px-2 py-0.5 rounded-md">
-                      {selectedCustomerForPreview.customerCode}
-                    </span>
-                  </div>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Currency: <strong className="text-slate-700">{selectedCustomerForPreview.currency || 'INR'}</strong>
-                    {selectedCustomerForPreview.creditPeriodDays ? ` • ${selectedCustomerForPreview.creditPeriodDays} Days Credit` : ''}
-                  </p>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-slate-900 text-base font-extrabold tracking-tight">
+                    {selectedCustomerForPreview.companyName}
+                  </h3>
+                  <span className="font-mono text-xs font-bold bg-orange-50 text-orange-700 border border-orange-200 px-2 py-0.5 rounded-lg">
+                    {selectedCustomerForPreview.customerCode}
+                  </span>
                 </div>
               </div>
 
@@ -1960,7 +1987,7 @@ export default function CustomerMasterSubTab() {
                 <button
                   type="button"
                   onClick={() => setIsPreviewModalOpen(false)}
-                  className="p-1.5 text-slate-400 hover:text-slate-700 hover:bg-slate-200/80 rounded-xl transition-colors cursor-pointer"
+                  className="text-slate-400 hover:text-slate-800 hover:bg-slate-100 p-1.5 rounded-xl transition-colors cursor-pointer"
                 >
                   <X className="w-5 h-5" />
                 </button>
@@ -1969,6 +1996,31 @@ export default function CustomerMasterSubTab() {
 
             {/* Dossier Content */}
             <div className="p-6 max-h-[75vh] overflow-y-auto space-y-5 text-xs text-slate-700">
+              {/* Business Profile & Additional Information */}
+              {(selectedCustomerForPreview.briefAboutCustomerBusiness || selectedCustomerForPreview.anyOtherInformation) && (
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-1.5">
+                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <Building2 className="w-3.5 h-3.5 text-orange-500" />
+                      Brief About Customer Business
+                    </span>
+                    <p className="text-slate-700">
+                      {selectedCustomerForPreview.briefAboutCustomerBusiness || '—'}
+                    </p>
+                  </div>
+
+                  <div className="p-4 rounded-xl border border-slate-200 bg-slate-50/60 space-y-1.5">
+                    <span className="font-bold text-slate-900 flex items-center gap-1.5">
+                      <FileText className="w-3.5 h-3.5 text-orange-500" />
+                      Any Other Information
+                    </span>
+                    <p className="text-slate-700">
+                      {selectedCustomerForPreview.anyOtherInformation || '—'}
+                    </p>
+                  </div>
+                </div>
+              )}
+
               {/* Addresses */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Billing */}
@@ -2159,6 +2211,87 @@ export default function CustomerMasterSubTab() {
                   <span>Credit Period: <strong className="text-slate-900">{selectedCustomerForPreview.creditPeriodDays ?? 30} Days</strong></span>
                   <span>Credit Limit: <strong className="text-slate-900 font-mono">₹{selectedCustomerForPreview.creditLimitINR?.toLocaleString('en-IN') || '0'}</strong></span>
                   <span>Currency: <strong className="text-slate-900">{selectedCustomerForPreview.currency || 'INR'}</strong></span>
+                </div>
+              </div>
+
+              {/* Record Audit & Activity Trail (Created By & Last Updated By) */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-white flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 flex items-center justify-center shrink-0">
+                      <UserCheck className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Created By
+                      </span>
+                      <span className="text-xs font-bold text-slate-900 block mt-0.5">
+                        {selectedCustomerForPreview.createdBy?.name ||
+                          selectedCustomerForPreview.createdByName ||
+                          'System'}
+                      </span>
+                      {selectedCustomerForPreview.createdBy?.email && (
+                        <span className="text-[11px] text-slate-500 block">
+                          {selectedCustomerForPreview.createdBy.email}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-end gap-1">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                      Created At
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-700 block mt-0.5">
+                      {selectedCustomerForPreview.createdAt
+                        ? new Date(selectedCustomerForPreview.createdAt).toLocaleString('en-IN', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short'
+                          })
+                        : '—'}
+                    </span>
+                  </div>
+                </div>
+
+                <div className="p-3.5 rounded-xl border border-slate-200 bg-white flex items-start justify-between gap-3">
+                  <div className="flex items-start gap-2.5">
+                    <div className="w-8 h-8 rounded-lg bg-amber-50 border border-amber-200 text-amber-700 flex items-center justify-center shrink-0">
+                      <UserCheck className="w-4 h-4" />
+                    </div>
+                    <div>
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
+                        Last Updated By
+                      </span>
+                      <span className="text-xs font-bold text-slate-900 block mt-0.5">
+                        {selectedCustomerForPreview.updatedBy?.name ||
+                          selectedCustomerForPreview.updatedByName ||
+                          selectedCustomerForPreview.createdBy?.name ||
+                          selectedCustomerForPreview.createdByName ||
+                          'System'}
+                      </span>
+                      {(selectedCustomerForPreview.updatedBy?.email ||
+                        selectedCustomerForPreview.createdBy?.email) && (
+                        <span className="text-[11px] text-slate-500 block">
+                          {selectedCustomerForPreview.updatedBy?.email ||
+                            selectedCustomerForPreview.createdBy?.email}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center justify-end gap-1">
+                      <Clock className="w-3 h-3 text-slate-400" />
+                      Last Updated At
+                    </span>
+                    <span className="text-[11px] font-semibold text-slate-700 block mt-0.5">
+                      {selectedCustomerForPreview.updatedAt
+                        ? new Date(selectedCustomerForPreview.updatedAt).toLocaleString('en-IN', {
+                            dateStyle: 'medium',
+                            timeStyle: 'short'
+                          })
+                        : '—'}
+                    </span>
+                  </div>
                 </div>
               </div>
             </div>

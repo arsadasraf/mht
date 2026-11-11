@@ -1,10 +1,10 @@
 import { Router } from 'express';
 import { getRfqs, createRfq } from '../controllers/rfq.controller.js';
-import { requireAuth } from '../../../middleware/auth.middleware.js';
+import { authenticate } from '../../../middleware/auth.middleware.js';
 
 const router = Router();
 
-router.use(requireAuth);
+router.use(authenticate);
 
 router.get('/', getRfqs);
 router.post('/', createRfq);

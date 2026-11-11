@@ -1,0 +1,65 @@
+model Drawing {
+  id            String   @id @default(uuid()) @db.Uuid
+  projectId     String
+  designItemCode String  @default("")
+  drawingNumber String
+  title         String
+  revision      String   @default("v1")
+  versionNumber Int      @default(1)
+  category      String   @default("2D_MANUFACTURING") // GA_LAYOUT, 2D_MANUFACTURING, 3D_STEP_MODEL, ELECTRICAL_SCHEMATIC, PHOTO
+  status        String   @default("DRAFT") // DRAFT, UNDER_REVIEW, APPROVED, REJECTED, RELEASED
+  isReleased    Boolean  @default(false)
+  releasedAt    DateTime?
+  releasedByName String  @default("")
+  modellingProgress Float @default(0) // 0 - 100%
+  draftingProgress  Float @default(0) // 0 - 100%
+  fileKey       String   @default("")
+  fileUrl       String   @default("")
+  fileName      String   @default("")
+  mimeType      String   @default("application/pdf")
+  fileSizeBytes Int      @default(0)
+
+  // Universal Action Tracking
+  createdById   String?  @db.Uuid
+  createdByName String   @default("")
+  updatedById   String?  @db.Uuid
+  updatedByName String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([drawingNumber])
+  @@index([status])
+  @@index([isReleased])
+  @@map("design_drawings")
+}
+
+model DrawingRevision {
+  id            String   @id @default(uuid()) @db.Uuid
+  drawingId     String?  @db.Uuid
+  drawingNumber String
+  title         String   @default("")
+  revision      String   @default("v1")
+  changeSummary String   @default("")
+  ecoNumber     String   @default("")
+  dcrNumber     String   @default("")
+  fileUrl       String   @default("")
+  fileName      String   @default("")
+  revisedById   String?  @db.Uuid
+  revisedByName String   @default("")
+  reviewerName  String   @default("")
+
+  // Universal Action Tracking
+  createdById   String?  @db.Uuid
+  createdByName String   @default("")
+  updatedById   String?  @db.Uuid
+  updatedByName String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([drawingId])
+  @@index([drawingNumber])
+  @@map("design_drawing_revisions")
+}
+
+

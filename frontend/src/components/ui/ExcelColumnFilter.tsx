@@ -196,7 +196,7 @@ export default function ExcelColumnFilter({
       {isOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className={`absolute top-full mt-2 z-50 w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 text-xs text-slate-800 ${
+          className={`absolute top-full mt-2 z-[100] w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 text-xs text-slate-800 ${
             align === 'right' ? 'right-0' : 'left-0'
           }`}
         >

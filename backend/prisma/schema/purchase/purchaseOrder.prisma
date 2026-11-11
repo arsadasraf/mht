@@ -1,0 +1,56 @@
+model PurchaseOrder {
+  id             String   @id @default(uuid()) @db.Uuid
+  poNumber       String   @unique
+  projectId      String
+  vendorId       String?  @db.Uuid
+  vendorCode     String   @default("")
+  vendorName     String   @default("")
+  status         String   @default("APPROVED") // DRAFT, PENDING_APPROVAL, APPROVED, PARTIALLY_RECEIVED, CLOSED, FROZEN_ECO
+  isLocked       Boolean  @default(false)
+
+  items          Json     @default("[]")
+  totalAmount    Json     @default("{}") // { currency, amount, exchangeRate, baseAmountINR }
+  notes          String   @default("")
+
+  approvedById   String?  @db.Uuid
+  approvedByName String   @default("")
+  approvedAt     DateTime?
+
+  // Universal Action Tracking
+  createdById    String?  @db.Uuid
+  createdByName  String   @default("")
+  updatedById    String?  @db.Uuid
+  updatedByName  String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([projectId])
+  @@index([poNumber])
+  @@map("purchase_orders")
+}
+
+model PurchaseBill {
+  id            String   @id @default(uuid()) @db.Uuid
+  billNumber    String   @unique
+  vendorName    String
+  poNumber      String
+  gateEntryNo   String   @default("Pending Inward")
+  billDate      String   @default("")
+  taxableAmount Float    @default(0)
+  taxAmount     Float    @default(0)
+  totalAmount   Float    @default(0)
+  dueDate       String   @default("")
+  status        String   @default("MATCHED")
+
+  // Universal Action Tracking
+  createdById   String?  @db.Uuid
+  createdByName String   @default("")
+  updatedById   String?  @db.Uuid
+  updatedByName String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([poNumber])
+  @@map("purchase_bills")
+}
+

@@ -1,22 +1,36 @@
-import { GateEntry } from '../models/gateEntry.model.js';
+import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
+
+const getActorName = (user) => {
+  if (!user) return 'System';
+  return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.name || user.email || 'System';
+};
 
 export const getGateEntries = async (req, res, next) => {
   try {
     const { status, projectId, search } = req.query;
-    const query = {};
-    if (status) query.status = status;
-    if (projectId) query.projectId = projectId.toUpperCase();
+    const where = {};
+    if (status) where.status = String(status);
+    if (projectId) where.projectId = String(projectId).toUpperCase();
     if (search) {
-      query.$or = [
-        { gateEntryNumber: { $regex: search, $options: 'i' } },
-        { poNumber: { $regex: search, $options: 'i' } },
-        { vendorName: { $regex: search, $options: 'i' } }
+      const q = String(search).trim();
+      where.OR = [
+        { gateEntryNumber: { contains: q, mode: 'insensitive' } },
+        { poNumber: { contains: q, mode: 'insensitive' } },
+        { vendorName: { contains: q, mode: 'insensitive' } }
       ];
     }
 
-    const entries = await GateEntry.find(query).sort({ inwardDate: -1 });
-    res.status(200).json({ success: true, count: entries.length, gateEntries: entries });
+    const entries = await prisma.gateEntry.findMany({
+      where,
+      orderBy: { inwardDate: 'desc' }
+    });
+
+    res.status(200).json({
+      success: true,
+      count: entries.length,
+      gateEntries: entries.map((e) => ({ ...e, _id: e.id }))
+    });
   } catch (error) {
     next(error);
   }
@@ -24,38 +38,45 @@ export const getGateEntries = async (req, res, next) => {
 
 export const createGateEntry = async (req, res, next) => {
   try {
-    const count = await GateEntry.countDocuments();
+    const count = await prisma.gateEntry.count();
     const gateEntryNumber = `GE-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const actorName = getActorName(req.user);
 
-    const { poNumber, projectId, vendorName, challanOrInvoiceNumber, vehicleNumber, itemsCount, notes } = req.body;
+    const { poNumber, projectId, vendorName, challanOrInvoiceNumber = '', vehicleNumber = '', itemsCount = 1, notes = '' } = req.body;
 
-    const entry = new GateEntry({
-      gateEntryNumber,
-      poNumber: poNumber.toUpperCase(),
-      projectId: projectId.toUpperCase(),
-      vendorName,
-      challanOrInvoiceNumber,
-      vehicleNumber,
-      itemsCount: Number(itemsCount || 1),
-      status: 'QUARANTINE_HOLD', // Mandatory initial quarantine hold
-      notes,
-      securityGuardName: req.user ? `${req.user.firstName} ${req.user.lastName}` : 'Security Gate',
-      createdBy: req.user?._id,
-      updatedBy: req.user?._id
+    const entry = await prisma.gateEntry.create({
+      data: {
+        gateEntryNumber,
+        poNumber: String(poNumber || 'PO-2026-0001').toUpperCase(),
+        projectId: String(projectId || 'PRJ-2026-1001').toUpperCase(),
+        vendorName: vendorName || 'Approved Vendor',
+        challanOrInvoiceNumber,
+        vehicleNumber,
+        itemsCount: Number(itemsCount || 1),
+        status: 'QUARANTINE_HOLD',
+        notes,
+        securityGuardName: actorName,
+        createdById: req.user?.id || null,
+        createdByName: actorName,
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
     });
-
-    await entry.save();
 
     await logAuditEvent({
       req,
       action: 'GATE_ENTRY_LOGGED',
       module: 'incoming-quality',
-      entityId: entry._id,
+      entityId: entry.id,
       entityType: 'GateEntry',
-      notes: `Inward gate entry ${gateEntryNumber} logged for PO ${poNumber}. Status: QUARANTINE_HOLD`
+      notes: `Inward gate entry ${gateEntryNumber} logged for PO ${entry.poNumber}. Status: QUARANTINE_HOLD`
     });
 
-    res.status(201).json({ success: true, message: 'Gate entry created in quarantine hold.', gateEntry: entry });
+    res.status(201).json({
+      success: true,
+      message: 'All set! Gate entry created in quarantine hold.',
+      gateEntry: { ...entry, _id: entry.id }
+    });
   } catch (error) {
     next(error);
   }

@@ -1,31 +1,37 @@
 # ==============================================================================
 # Machine House (MH) ERP — Backend Lightweight Dockerfile
-# Base: Node.js Latest Alpine Linux (Lightweight Footprint)
+# Base: Node.js 20 Alpine Linux (with Prisma Engine & OpenSSL Support)
 # ==============================================================================
-FROM node:alpine AS runner
+FROM node:20-alpine AS runner
 
-# Install dumb-init for clean process signal handling
-RUN apk add --no-cache dumb-init
+# Install dumb-init for PID 1 signal forwarding and openssl for Prisma query engine
+RUN apk add --no-cache dumb-init openssl
 
 WORKDIR /app
 
 ENV NODE_ENV=production
 ENV PORT=5000
 
-# Copy package descriptors first to leverage Docker layer caching
+# 1. Copy package manifests and Prisma schemas first
 COPY package*.json ./
+COPY prisma/ ./prisma/
 
-# Install only production dependencies and clean cache
-RUN npm ci --omit=dev --ignore-scripts && npm cache clean --force
+# 2. Install all dependencies (so Prisma CLI is available for code generation)
+RUN npm ci
 
-# Copy application source code
+# 3. Generate Prisma Client specifically for the Alpine Linux musl runtime
+RUN npx prisma generate
+
+# 4. Prune devDependencies to keep the final image minimal
+RUN npm prune --production && npm cache clean --force
+
+# 5. Copy server and application source code
 COPY server.js ./
 COPY src/ ./src/
 
-# Create uploads directory and set permissions for node user
+# 6. Ensure uploads directory exists with non-root node ownership
 RUN mkdir -p uploads && chown -R node:node /app
 
-# Switch to non-root node user for security
 USER node
 
 EXPOSE 5000

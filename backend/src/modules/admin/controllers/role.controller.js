@@ -1,6 +1,11 @@
 import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
 
+const getActorName = (user) => {
+  if (!user) return 'System';
+  return `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email || 'System';
+};
+
 export const getRoles = async (req, res, next) => {
   try {
     const roles = await prisma.role.findMany({
@@ -29,7 +34,8 @@ export const updateRolePermissions = async (req, res, next) => {
       data: {
         ...(allowedRoutes !== undefined ? { allowedRoutes } : {}),
         ...(description !== undefined ? { description } : {}),
-        updatedById: req.user?.id || null
+        updatedById: req.user?.id || null,
+        updatedByName: getActorName(req.user)
       }
     });
 
@@ -89,7 +95,9 @@ export const createRole = async (req, res, next) => {
         allowedRoutes: Array.isArray(allowedRoutes) ? allowedRoutes : [],
         isSystemRole: false,
         createdById: req.user?.id || null,
-        updatedById: req.user?.id || null
+        createdByName: getActorName(req.user),
+        updatedById: req.user?.id || null,
+        updatedByName: getActorName(req.user)
       }
     });
 

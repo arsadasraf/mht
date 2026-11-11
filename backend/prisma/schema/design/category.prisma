@@ -1,0 +1,18 @@
+model DesignCategoryMaster {
+  id            String   @id @default(uuid()) @db.Uuid
+  name          String   @unique
+  description   String?  @default("")
+  isActive      Boolean  @default(true)
+
+  // Universal Action Tracking
+  createdById   String?  @db.Uuid
+  createdByName String   @default("")
+  updatedById   String?  @db.Uuid
+  updatedByName String   @default("")
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([name])
+  @@index([isActive])
+  @@map("design_category_masters")
+}
