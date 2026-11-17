@@ -224,9 +224,10 @@ export const crmApi = apiSlice.injectEndpoints({
         result?.customerPos
           ? [
               ...result.customerPos.map(({ _id }) => ({ type: 'CustomerPo' as const, id: _id })),
-              { type: 'CustomerPo' as const, id: 'LIST' }
+              { type: 'CustomerPo' as const, id: 'LIST' },
+              'CustomerPo'
             ]
-          : [{ type: 'CustomerPo' as const, id: 'LIST' }]
+          : [{ type: 'CustomerPo' as const, id: 'LIST' }, 'CustomerPo']
     }),
 
     getCustomerPoById: builder.query<{ success: boolean; customerPo: CustomerPo }, string>({
@@ -241,6 +242,7 @@ export const crmApi = apiSlice.injectEndpoints({
         body
       }),
       invalidatesTags: [
+        'CustomerPo',
         { type: 'CustomerPo', id: 'LIST' },
         { type: 'Lead', id: 'LIST' },
         { type: 'Quotation', id: 'LIST' }
@@ -254,6 +256,7 @@ export const crmApi = apiSlice.injectEndpoints({
         body
       }),
       invalidatesTags: (result, error, { id }) => [
+        'CustomerPo',
         { type: 'CustomerPo', id },
         { type: 'CustomerPo', id: 'LIST' }
       ]
@@ -269,8 +272,10 @@ export const crmApi = apiSlice.injectEndpoints({
         body
       }),
       invalidatesTags: (result, error, { id }) => [
+        'CustomerPo',
         { type: 'CustomerPo', id },
-        { type: 'CustomerPo', id: 'LIST' }
+        { type: 'CustomerPo', id: 'LIST' },
+        'Project'
       ]
     }),
 
@@ -284,8 +289,10 @@ export const crmApi = apiSlice.injectEndpoints({
         body
       }),
       invalidatesTags: (result, error, { id }) => [
+        'CustomerPo',
         { type: 'CustomerPo', id },
-        { type: 'CustomerPo', id: 'LIST' }
+        { type: 'CustomerPo', id: 'LIST' },
+        'Project'
       ]
     }),
 
@@ -294,7 +301,7 @@ export const crmApi = apiSlice.injectEndpoints({
         url: `/crm/customer-pos/${id}`,
         method: 'DELETE'
       }),
-      invalidatesTags: [{ type: 'CustomerPo', id: 'LIST' }]
+      invalidatesTags: ['CustomerPo', { type: 'CustomerPo', id: 'LIST' }, 'Project']
     }),
 
     convertCustomerPoToProject: builder.mutation<{ success: boolean; project: unknown; customerPo: CustomerPo }, { id: string } & Record<string, unknown>>({

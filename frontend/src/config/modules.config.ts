@@ -55,6 +55,8 @@ export const CORE_MODULES: CoreModule[] = [
     tabs: [
       { id: 'dashboard', label: 'Dashboard', path: '/design/dashboard', icon: 'PieChart' },
       { id: 'projects', label: 'Projects', path: '/design/projects', icon: 'FolderGit2' },
+      { id: 'kanban', label: 'Kanban', path: '/design/kanban', icon: 'Kanban' },
+      { id: 'gantt', label: 'Gantt Chart', path: '/design/gantt', icon: 'CalendarCheck' },
       { id: 'masters', label: 'Master', path: '/design/masters', icon: 'Settings' }
     ]
   },
@@ -67,10 +69,11 @@ export const CORE_MODULES: CoreModule[] = [
     description: '',
     tabs: [
       { id: 'dashboard', label: 'Dashboard', path: '/purchase/dashboard', icon: 'PieChart' },
+      { id: 'projects', label: 'Projects', path: '/purchase/projects', icon: 'FolderGit2' },
       { id: 'rfq', label: 'Outward RFQ', path: '/purchase/rfq', icon: 'Inbox' },
       { id: 'quotations', label: 'Inward Quotation', path: '/purchase/quotations', icon: 'FileSpreadsheet' },
-      { id: 'orders', label: 'Outward PO', path: '/purchase/orders', icon: 'Receipt' },
-      { id: 'bills', label: 'Purchase Bills', path: '/purchase/bills', icon: 'IndianRupee' },
+      { id: 'orders', label: 'Outward PO', path: '/purchase/orders', icon: 'IndianRupee' },
+      { id: 'bills', label: 'Purchase Bills', path: '/purchase/bills', icon: 'Receipt' },
       { id: 'price-list', label: 'Price List', path: '/purchase/price-list', icon: 'Calculator' },
       { id: 'masters', label: 'Master', path: '/purchase/masters', icon: 'Settings' }
     ]
@@ -100,63 +103,47 @@ export const CORE_MODULES: CoreModule[] = [
       { id: 'inventory', label: 'Inventory Ledger', path: '/store/inventory', icon: 'Boxes' },
       { id: 'wip', label: 'WIP Management', path: '/store/wip', icon: 'Wrench' },
       { id: 'dc', label: 'Delivery Challan (DC)', path: '/store/dc', icon: 'Truck' },
-      { id: 'master', label: 'Store Master', path: '/store/master', icon: 'Settings' },
-      { id: 'allocations', label: 'Project Hard Allocations', path: '/store/allocations', icon: 'Lock' }
+      { id: 'master', label: 'Master', path: '/store/master', icon: 'Settings' }
     ]
   },
   {
     id: 'production-trial',
-    name: 'Production & Trials',
+    name: 'Production & Testing',
     slug: 'production-trial',
-    path: '/production-trial/assembly',
+    path: '/production-trial/dashboard',
     icon: 'Wrench',
     description: '',
     tabs: [
-      { id: 'assembly', label: 'Assembly Workflows', path: '/production-trial/assembly', icon: 'Kanban' },
-      { id: 'trials', label: 'Machine Trials & Snags', path: '/production-trial/trials', icon: 'Activity' }
+      { id: 'dashboard', label: 'Dashboard', path: '/production-trial/dashboard', icon: 'PieChart' },
+      { id: 'projects', label: 'Projects & Work Orders', path: '/production-trial/projects', icon: 'FolderGit2' },
+      { id: 'masters', label: 'Masters', path: '/production-trial/masters/team', icon: 'Settings' }
     ]
   },
   {
     id: 'dispatch',
-    name: 'Dispatch & Gate Pass',
+    name: 'Trials/Inspection & Dispatch',
     slug: 'dispatch',
-    path: '/dispatch/verification',
+    path: '/dispatch/dashboard',
     icon: 'Truck',
     description: '',
     tabs: [
-      { id: 'verification', label: 'Zero-Snag Block & Gate Pass', path: '/dispatch/verification', icon: 'CheckCircle2' }
+      { id: 'dashboard', label: 'Dashboard', path: '/dispatch/dashboard', icon: 'BarChart2' },
+      { id: 'projects', label: 'Projects & Work Orders', path: '/dispatch/projects', icon: 'Kanban' },
+      { id: 'masters', label: 'Masters', path: '/dispatch/masters/team', icon: 'Sliders' }
     ]
   },
   {
     id: 'after-sales',
     name: 'After Sales & Service',
     slug: 'after-sales',
-    path: '/after-sales/warranty',
+    path: '/after-sales/dashboard',
     icon: 'Headphones',
     description: '',
     tabs: [
-      { id: 'warranty', label: 'Warranties & Field Tickets', path: '/after-sales/warranty', icon: 'LifeBuoy' }
-    ]
-  },
-  {
-    id: 'masters',
-    name: 'Master Data',
-    slug: 'masters',
-    path: '/masters/vendors',
-    icon: 'Database',
-    description: '',
-    tabs: [
-      { id: 'vendors', label: 'Vendor', path: '/masters/vendors', icon: 'Building2' },
-      { id: 'customers', label: 'Customer', path: '/masters/customers', icon: 'Users' },
-      { id: 'locations', label: 'Store Location', path: '/masters/locations', icon: 'PackageSearch' },
-      { id: 'categories', label: 'Category', path: '/masters/categories', icon: 'FolderGit2' },
-      { id: 'rm-items', label: 'RM Items', path: '/masters/rm-items', icon: 'Layers' },
-      { id: 'bo-items', label: 'BO Items', path: '/masters/bo-items', icon: 'Calculator' },
-      { id: 'components', label: 'Component', path: '/masters/components', icon: 'FileCode2' },
-      { id: 'subassemblies', label: 'Subassembly', path: '/masters/subassemblies', icon: 'Boxes' },
-      { id: 'assemblies', label: 'Assembly', path: '/masters/assemblies', icon: 'Kanban' },
-      { id: 'company-profile', label: 'Company Profile', path: '/masters/company-profile', icon: 'ShieldCheck' },
-      { id: 'settings', label: 'Setting', path: '/masters/settings', icon: 'Settings' }
+      { id: 'dashboard', label: 'Dashboard', path: '/after-sales/dashboard', icon: 'BarChart2' },
+      { id: 'projects', label: 'Projects & Work Orders', path: '/after-sales/projects', icon: 'Kanban' },
+      { id: 'warranty', label: 'Warranties & Field Tickets', path: '/after-sales/warranty', icon: 'LifeBuoy' },
+      { id: 'masters', label: 'Masters', path: '/after-sales/masters/customers', icon: 'Sliders' }
     ]
   },
   {

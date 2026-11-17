@@ -130,7 +130,7 @@ export default function RoleMatrixTab() {
 
     try {
       await updateRolePermissions({
-        id: selectedRole._id,
+        id: selectedRole.id || selectedRole._id,
         allowedRoutes
       }).unwrap();
 

@@ -5,7 +5,17 @@ model Bom {
   revision             String   @default("REV-0")
   attachedAssemblyCode String   @default("")
   attachedAssemblyName String   @default("")
+  attachedDrawingType  String   @default("ASSEMBLY") // ASSEMBLY, SUB_ASSEMBLY, COMPONENT
+  attachedDrawingNumber String  @default("")
   isFrozen             Boolean  @default(false)
+  approvalStatus       String   @default("DRAFT") // DRAFT, PENDING_APPROVAL, APPROVED, REJECTED, LOCKED_FREEZE
+  rejectionReason      String   @default("")
+
+  // List of all attached drawings on this Work Order (supports multiple drawings)
+  attachedDrawings     Json     @default("[]")
+
+  // Precomputed aggregates and counts for instantaneous rendering
+  summary              Json     @default("{}")
 
   // Hierarchical BOM Tree Items
   items                Json     @default("[]")

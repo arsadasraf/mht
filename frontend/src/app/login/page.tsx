@@ -80,12 +80,12 @@ export default function LoginPage() {
       }
 
       if (typeof window !== 'undefined') {
-        if (data.accessToken) localStorage.setItem('mht_access_token', data.accessToken);
-        if (data.refreshToken) localStorage.setItem('mht_refresh_token', data.refreshToken);
+        localStorage.removeItem('mht_access_token');
+        localStorage.removeItem('mht_refresh_token');
         if (data.user) localStorage.setItem('mht_user', JSON.stringify(data.user));
       }
 
-      dispatch(setCredentials({ user: data.user, accessToken: data.accessToken }));
+      dispatch(setCredentials({ user: data.user }));
       router.push('/crm/leads');
     } catch (err: unknown) {
       const errorObj = err as { message?: string; fixHint?: string };
@@ -123,12 +123,12 @@ export default function LoginPage() {
       }
 
       if (typeof window !== 'undefined') {
-        if (data.accessToken) localStorage.setItem('mht_access_token', data.accessToken);
-        if (data.refreshToken) localStorage.setItem('mht_refresh_token', data.refreshToken);
+        localStorage.removeItem('mht_access_token');
+        localStorage.removeItem('mht_refresh_token');
         if (data.user) localStorage.setItem('mht_user', JSON.stringify(data.user));
       }
 
-      dispatch(setCredentials({ user: data.user, accessToken: data.accessToken }));
+      dispatch(setCredentials({ user: data.user }));
       router.push('/crm/leads');
     } catch (err: unknown) {
       const errorObj = err as { message?: string; fixHint?: string };

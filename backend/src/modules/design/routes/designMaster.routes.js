@@ -2,6 +2,7 @@ import { Router } from 'express';
 import {
   getDesignMasters,
   getDesignTeamUsers,
+  updateDesignTeamMembership,
   getDesignCategories,
   createDesignCategory,
   updateDesignCategory,
@@ -19,6 +20,7 @@ const router = Router();
 router.use(authenticate, authorizeRouteAccess('/design'));
 
 router.get('/team-users', getDesignTeamUsers);
+router.patch('/team-membership', updateDesignTeamMembership);
 router.get('/categories', getDesignCategories);
 router.post('/categories', createDesignCategory);
 router.put('/categories/:id', updateDesignCategory);

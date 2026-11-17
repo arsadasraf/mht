@@ -7,7 +7,8 @@ import { fileURLToPath } from 'url';
 
 // Middlewares
 import { sanitizeMiddleware } from './middleware/sanitize.middleware.js';
-import { ipWhitelistMiddleware } from './middleware/ipWhitelist.middleware.js';
+import { authenticate } from './middleware/auth.middleware.js';
+import { requireModulePermission } from './middleware/rbac.middleware.js';
 import { errorHandler } from './middleware/error.middleware.js';
 
 // Active PostgreSQL + Prisma Module Routers
@@ -21,7 +22,6 @@ import storeRoutes from './modules/store/routes/index.js';
 import productionTrialRoutes from './modules/production-trial/routes/index.js';
 import dispatchRoutes from './modules/dispatch/routes/index.js';
 import afterSalesRoutes from './modules/after-sales/routes/index.js';
-import masterRoutes from './modules/masters/routes/index.js';
 import s3Routes from './routes/s3.routes.js';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -54,9 +54,6 @@ app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 // OWASP Input Sanitization
 app.use(sanitizeMiddleware);
 
-// Plant & Department IP Whitelisting Security Check
-app.use(ipWhitelistMiddleware);
-
 // Serve local upload storage fallback (for CAD drawings and QC photos in local dev)
 app.use('/uploads', express.static(path.join(__dirname, '../uploads')));
 
@@ -73,21 +70,19 @@ app.get('/api/v1/health', (req, res) => {
   });
 });
 
-// Mount Active Modules (All 10 Core Operational Modules on PostgreSQL + Prisma)
+// Mount Active Modules with Server-Side Authentication & Module-Wise RBAC Enforcement
 app.use('/api/v1/admin', adminRoutes);
-app.use('/api/v1/crm', crmRoutes);
-app.use('/api/v1/project-setup', projectSetupRoutes);
-app.use('/api/v1/design', designRoutes);
-app.use('/api/v1/purchase', purchaseRoutes);
-app.use('/api/v1/quality', incomingQualityRoutes);
-app.use('/api/v1/incoming-quality', incomingQualityRoutes);
-app.use('/api/v1/store', storeRoutes);
-app.use('/api/v1/production-trial', productionTrialRoutes);
-app.use('/api/v1/dispatch', dispatchRoutes);
-app.use('/api/v1/after-sales', afterSalesRoutes);
-app.use('/api/v1/masters', masterRoutes);
-app.use('/api/masters', masterRoutes);
-app.use('/api/v1/s3', s3Routes);
+app.use('/api/v1/crm', authenticate, requireModulePermission('/crm'), crmRoutes);
+app.use('/api/v1/project-setup', authenticate, requireModulePermission('/project-setup'), projectSetupRoutes);
+app.use('/api/v1/design', authenticate, requireModulePermission('/design'), designRoutes);
+app.use('/api/v1/purchase', authenticate, requireModulePermission('/purchase'), purchaseRoutes);
+app.use('/api/v1/quality', authenticate, requireModulePermission('/incoming-quality'), incomingQualityRoutes);
+app.use('/api/v1/incoming-quality', authenticate, requireModulePermission('/incoming-quality'), incomingQualityRoutes);
+app.use('/api/v1/store', authenticate, requireModulePermission('/store'), storeRoutes);
+app.use('/api/v1/production-trial', authenticate, requireModulePermission('/production-trial'), productionTrialRoutes);
+app.use('/api/v1/dispatch', authenticate, requireModulePermission('/dispatch'), dispatchRoutes);
+app.use('/api/v1/after-sales', authenticate, requireModulePermission('/after-sales'), afterSalesRoutes);
+app.use('/api/v1/s3', authenticate, s3Routes);
 
 // Global Error Handling Middleware
 app.use(errorHandler);

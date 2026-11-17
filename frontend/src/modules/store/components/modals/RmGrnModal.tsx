@@ -288,11 +288,11 @@ export default function RmGrnModal({ isOpen, onClose, onSubmitSuccess }: RmGrnMo
 
             <div className="sm:col-span-2">
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Project Hard Allocation (Optional)
+                Work Order Hard Allocation (Optional)
               </label>
               <input
                 type="text"
-                placeholder="Leave blank for General Raw Stock or enter PRJ-XXXX"
+                placeholder="Leave blank for General Raw Stock or enter WO-YYYY-XXXX"
                 value={formData.projectId}
                 onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 font-mono"

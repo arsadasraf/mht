@@ -8,18 +8,53 @@ const getActorName = (user) => {
 };
 
 const recalculateProjectProgress = async (projectId, user = null) => {
-  const allMilestones = await prisma.milestone.findMany({
-    where: { projectId },
-    orderBy: { order: 'asc' }
-  });
-  if (allMilestones.length === 0) return 0;
+  const [project, allMilestones] = await Promise.all([
+    prisma.project.findUnique({ where: { projectId } }),
+    prisma.milestone.findMany({
+      where: { projectId },
+      orderBy: { order: 'asc' }
+    })
+  ]);
+
+  if (!project) return 0;
+
+  if (allMilestones.length === 0) {
+    if (project.status !== 'CREATED') {
+      await prisma.project
+        .update({
+          where: { projectId },
+          data: {
+            progressPercent: 0,
+            status: 'APPROVED',
+            updatedById: user?.id || null,
+            updatedByName: getActorName(user)
+          }
+        })
+        .catch(() => {});
+    }
+    return 0;
+  }
 
   const completedCount = allMilestones.filter((m) => m.status === 'COMPLETED').length;
+  const activeCount = allMilestones.filter(
+    (m) => m.status === 'IN_PROGRESS' || m.status === 'COMPLETED' || (m.completionPercent || 0) > 0
+  ).length;
   const progressPercent = Math.round((completedCount / allMilestones.length) * 100);
   const activeStage =
     allMilestones.find((m) => m.status === 'IN_PROGRESS')?.stageCode ||
     allMilestones.find((m) => m.status !== 'COMPLETED')?.stageCode ||
     'DISPATCH_READY';
+
+  let nextStatus = project.status;
+  if (project.status !== 'CREATED') {
+    if (completedCount === allMilestones.length) {
+      nextStatus = 'COMPLETED';
+    } else if (activeCount > 0) {
+      nextStatus = 'IN_PROGRESS';
+    } else {
+      nextStatus = 'ASSIGNED_TO_DEPARTMENT';
+    }
+  }
 
   await prisma.project
     .update({
@@ -27,6 +62,7 @@ const recalculateProjectProgress = async (projectId, user = null) => {
       data: {
         progressPercent,
         currentStage: activeStage,
+        status: nextStatus,
         updatedById: user?.id || null,
         updatedByName: getActorName(user)
       }
@@ -36,13 +72,30 @@ const recalculateProjectProgress = async (projectId, user = null) => {
   return progressPercent;
 };
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export const getMilestonesByProject = async (req, res, next) => {
   try {
     const { projectId } = req.params;
-    const upperProjectId = projectId.toUpperCase();
+    const cleanId = String(projectId).trim();
+    const upperProjectId = cleanId.toUpperCase();
+    const isUuid = UUID_REGEX.test(cleanId);
+
+    const orClauses = [
+      { projectId: upperProjectId },
+      { projectId: cleanId },
+      { project: { workOrderNumber: upperProjectId } },
+      { project: { projectId: upperProjectId } }
+    ];
+
+    if (isUuid) {
+      orClauses.push({ projectRefId: cleanId });
+    }
 
     const milestones = await prisma.milestone.findMany({
-      where: { projectId: upperProjectId },
+      where: {
+        OR: orClauses
+      },
       include: {
         subStages: { orderBy: { order: 'asc' } }
       },
@@ -208,6 +261,28 @@ export const updateMilestoneStatus = async (req, res, next) => {
 
     const progressPercent = await recalculateProjectProgress(existing.projectId, req.user);
 
+    if (status === 'IN_PROGRESS' || status === 'COMPLETED') {
+      const prj = await prisma.project.findUnique({ where: { projectId: existing.projectId } }).catch(() => null);
+      if (prj) {
+        const poOr = [
+          ...(prj.customerPoId ? [{ id: prj.customerPoId }] : []),
+          { convertedProjectId: prj.projectId },
+          ...(prj.customerPoNumber ? [{ poNumber: prj.customerPoNumber }] : [])
+        ];
+        await prisma.customerPo.updateMany({
+          where: {
+            OR: poOr,
+            status: { in: ['WORK_ORDER_CREATED', 'PROJECT_CONVERTED'] }
+          },
+          data: {
+            status: 'IN_PROGRESS',
+            updatedById: req.user?.id || null,
+            updatedByName: actorName
+          }
+        }).catch(() => {});
+      }
+    }
+
     res.status(200).json({
       success: true,
       message: `Stage moved to ${status.replace(/_/g, ' ')}.`,
@@ -342,17 +417,66 @@ export const addSubStageToMilestone = async (req, res, next) => {
       assignedToUserName,
       assignedToUserEmail,
       baselineStartDate,
-      targetEndDate
+      targetEndDate,
+      projectId: reqProjectId
     } = req.body;
 
     if (!title) {
       return res.status(400).json({ success: false, message: 'Sub-stage title is required.' });
     }
 
-    const milestone = await prisma.milestone.findUnique({
-      where: { id },
-      include: { subStages: true }
-    });
+    let milestone = null;
+    if (!id.startsWith('auto-')) {
+      milestone = await prisma.milestone.findUnique({
+        where: { id },
+        include: { subStages: true }
+      });
+    }
+
+    // If milestone ID is synthetic (e.g. auto-purchase-<projectId>) or not found, auto-find or create the department milestone!
+    if (!milestone && (id.startsWith('auto-') || reqProjectId)) {
+      const targetProjId = (reqProjectId || id.replace(/^auto-[a-z0-9_-]+-/, '')).toUpperCase().trim();
+      const proj = await prisma.project.findFirst({
+        where: { OR: [{ projectId: targetProjId }, { workOrderNumber: targetProjId }] }
+      });
+
+      if (proj) {
+        const deptMod = String(departmentModule || 'purchase').toLowerCase();
+        // Look for existing milestone for this department
+        milestone = await prisma.milestone.findFirst({
+          where: {
+            projectId: proj.projectId,
+            departmentModule: deptMod
+          },
+          include: { subStages: true }
+        });
+
+        if (!milestone) {
+          const defaultStageTitle = deptMod === 'purchase' ? 'Purchase & Sourcing' : (deptMod.charAt(0).toUpperCase() + deptMod.slice(1));
+          const count = await prisma.milestone.count({ where: { projectId: proj.projectId } });
+          milestone = await prisma.milestone.create({
+            data: {
+              projectRefId: proj.id,
+              projectId: proj.projectId,
+              title: defaultStageTitle,
+              stage: deptMod.toUpperCase(),
+              stageCode: deptMod.toUpperCase(),
+              departmentModule: deptMod,
+              order: count + 1,
+              leadRole: deptMod === 'purchase' ? 'Purchase Manager' : 'Project Manager',
+              weightPercent: 15,
+              baselineDate: new Date(),
+              projectedDate: proj.deliveryCommitmentDate ? new Date(proj.deliveryCommitmentDate) : new Date(Date.now() + 14 * 86400000),
+              status: 'IN_PROGRESS',
+              createdByName: getActorName(req.user),
+              updatedByName: getActorName(req.user)
+            },
+            include: { subStages: true }
+          });
+        }
+      }
+    }
+
     if (!milestone) {
       return res.status(404).json({ success: false, message: 'Parent stage not found.' });
     }
@@ -414,7 +538,12 @@ export const updateSubStage = async (req, res, next) => {
       assignedToUserId,
       assignedToUserName,
       assignedToUserEmail,
+      baselineStartDate,
       targetEndDate,
+      completionPercent,
+      priority,
+      estimatedHours,
+      actualHours,
       remarkText
     } = req.body;
 
@@ -435,18 +564,30 @@ export const updateSubStage = async (req, res, next) => {
 
     const nextStatus = status ?? existing.status;
     const isCompleted = nextStatus === 'COMPLETED';
+    const computedPercent =
+      completionPercent !== undefined
+        ? Number(completionPercent)
+        : isCompleted
+        ? 100
+        : nextStatus === 'IN_PROGRESS'
+        ? 50
+        : 0;
 
     await prisma.projectSubStage.update({
       where: { id: subStageId },
       data: {
         title: title !== undefined ? title.trim() : existing.title,
         status: nextStatus,
-        completionPercent: isCompleted ? 100 : nextStatus === 'IN_PROGRESS' ? 50 : 0,
-        actualCompletionDate: isCompleted ? new Date() : null,
+        completionPercent: computedPercent,
+        actualCompletionDate: isCompleted ? (existing.actualCompletionDate || new Date()) : null,
         assignedToUserId: assignedToUserId !== undefined ? assignedToUserId || null : existing.assignedToUserId,
         assignedToUserName: assignedToUserName !== undefined ? assignedToUserName : existing.assignedToUserName,
         assignedToUserEmail: assignedToUserEmail !== undefined ? assignedToUserEmail : existing.assignedToUserEmail,
+        baselineStartDate: baselineStartDate ? new Date(baselineStartDate) : existing.baselineStartDate,
         targetEndDate: targetEndDate ? new Date(targetEndDate) : existing.targetEndDate,
+        priority: priority !== undefined ? priority : existing.priority,
+        estimatedHours: estimatedHours !== undefined ? Number(estimatedHours) : existing.estimatedHours,
+        actualHours: actualHours !== undefined ? Number(actualHours) : existing.actualHours,
         remarks: currentRemarks,
         updatedById: req.user?.id || null,
         updatedByName: actorName

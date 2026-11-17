@@ -1,15 +1,25 @@
-export interface DispatchOrder {
+export interface DispatchTeamMember {
   _id: string;
-  dispatchNumber: string;
-  projectId: string;
-  customerPoNumber: string;
-  isZeroSnagClearanceAchieved: boolean; // Absolute Zero-Snag Block
-  unresolvedSnagCount: number;
-  gatePassNumber?: string;
-  packingListVerified: boolean;
-  transporterName?: string;
-  vehicleNumber?: string;
-  lrNumber?: string;
-  dispatchedAt?: string;
-  status: 'BLOCKED_SNAGS' | 'CLEARED_FOR_DISPATCH' | 'GATE_PASS_ISSUED' | 'DISPATCHED';
+  memberCode: string;
+  fullName: string;
+  designation: string;
+  email?: string;
+  phone?: string;
+  department: string;
+  skillSpecialty: string;
+  isActive: boolean;
+  notes?: string;
+}
+
+export interface DispatchSubStage {
+  _id: string;
+  subStageCode: string;
+  subStageName: string;
+  departmentModule: string;
+  parentStageCode: string;
+  defaultOrder: number;
+  standardDays: number;
+  weightPercent: number;
+  description?: string;
+  isActive: boolean;
 }

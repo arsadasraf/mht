@@ -1,5 +1,6 @@
 import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
+import { generateUniqueSequenceCode } from '../../../utils/sequenceGenerator.js';
 
 const getActorName = (user) => {
   if (!user) return 'System';
@@ -36,14 +37,19 @@ export const getEcos = async (req, res, next) => {
 
 export const createEco = async (req, res, next) => {
   try {
-    const count = await prisma.eco.count();
-    const ecoNumber = `ECO-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const ecoNumber = await generateUniqueSequenceCode({
+      model: 'eco',
+      field: 'ecoNumber',
+      prefix: `ECO-${new Date().getFullYear()}-`,
+      startSeq: 1,
+      padLength: 4
+    });
 
     const { projectId, title, reasonForChange, changeType = 'DESIGN_REVISION', affectedItemCodes = [] } = req.body;
     if (!projectId || !title || !reasonForChange) {
       return res.status(400).json({
         success: false,
-        message: 'Project ID, Title, and Reason for Change are required.'
+        message: 'Work Order Number, Title, and Reason for Change are required.'
       });
     }
 

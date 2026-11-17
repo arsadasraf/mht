@@ -1,5 +1,6 @@
 import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
+import { generateUniqueSequenceCode } from '../../../utils/sequenceGenerator.js';
 
 const getActorName = (user) => {
   if (!user) return 'System';
@@ -31,8 +32,13 @@ export const getServiceTickets = async (req, res, next) => {
 
 export const createServiceTicket = async (req, res, next) => {
   try {
-    const count = await prisma.serviceTicket.count();
-    const ticketNumber = `TKT-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const ticketNumber = await generateUniqueSequenceCode({
+      model: 'serviceTicket',
+      field: 'ticketNumber',
+      prefix: `TKT-${new Date().getFullYear()}-`,
+      startSeq: 1,
+      padLength: 4
+    });
     const actorName = getActorName(req.user);
 
     const {
@@ -49,7 +55,7 @@ export const createServiceTicket = async (req, res, next) => {
     const ticket = await prisma.serviceTicket.create({
       data: {
         ticketNumber,
-        projectId: String(projectId || 'PRJ-2026-1001').toUpperCase(),
+        projectId: String(projectId || 'WO-2026-1001').toUpperCase(),
         customerName,
         serviceType,
         title: title || 'Field Service Request',
@@ -105,6 +111,33 @@ export const updateTicketStatus = async (req, res, next) => {
         updatedByName: actorName
       }
     });
+
+    if (status === 'RESOLVED_CLOSED' && existing.serviceType === 'COMMISSIONING' && existing.projectId) {
+      const prj = await prisma.project.findFirst({
+        where: {
+          OR: [
+            { projectId: existing.projectId },
+            { workOrderNumber: existing.projectId }
+          ]
+        }
+      }).catch(() => null);
+
+      const poOr = [
+        ...(prj?.customerPoId ? [{ id: prj.customerPoId }] : []),
+        { convertedProjectId: existing.projectId },
+        ...(prj?.projectId ? [{ convertedProjectId: prj.projectId }] : []),
+        ...(prj?.customerPoNumber ? [{ poNumber: prj.customerPoNumber }] : [])
+      ];
+
+      await prisma.customerPo.updateMany({
+        where: { OR: poOr },
+        data: {
+          status: 'COMMISSIONED',
+          updatedById: req.user?.id || null,
+          updatedByName: actorName
+        }
+      }).catch(() => {});
+    }
 
     await logAuditEvent({
       req,

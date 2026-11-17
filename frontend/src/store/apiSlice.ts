@@ -10,6 +10,9 @@ const rawBaseQuery = fetchBaseQuery({
   baseUrl: '/api/v1',
   credentials: 'include',
   prepareHeaders: (headers) => {
+    // Anti-CSRF Custom Header
+    headers.set('X-Requested-With', 'XMLHttpRequest');
+
     let token: string | null = null;
     if (typeof window !== 'undefined') {
       token = localStorage.getItem('mht_access_token');
@@ -29,7 +32,7 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
   let result = await rawBaseQuery(args, api, extraOptions);
 
   if (result.error && (result.error.status === 401 || (result.error.data as any)?.code === 'TOKEN_EXPIRED')) {
-    // Attempt session refresh
+    // Attempt session refresh via HttpOnly cookie
     let refreshToken: string | null = null;
     if (typeof window !== 'undefined') {
       refreshToken = localStorage.getItem('mht_refresh_token');
@@ -45,15 +48,15 @@ const baseQueryWithReauth: BaseQueryFn<string | FetchArgs, unknown, FetchBaseQue
       extraOptions
     );
 
-    if (refreshResult.data && (refreshResult.data as any).accessToken) {
-      const newAccessToken = (refreshResult.data as any).accessToken;
-      const newRefreshToken = (refreshResult.data as any).refreshToken;
-      if (typeof window !== 'undefined') {
-        localStorage.setItem('mht_access_token', newAccessToken);
-        if (newRefreshToken) localStorage.setItem('mht_refresh_token', newRefreshToken);
-      }
-      // Retry original request with newly refreshed token
+    if (refreshResult.data && (refreshResult.data as any).success) {
+      // If server rotated tokens and set new HttpOnly cookies, retry original request
       result = await rawBaseQuery(args, api, extraOptions);
+    } else if (refreshResult.error) {
+      // If refresh failed, purge stale local storage items if any exist
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('mht_access_token');
+        localStorage.removeItem('mht_refresh_token');
+      }
     }
   }
 
@@ -81,15 +84,10 @@ export const apiSlice = createApi({
     'QcInspection',
     'Inventory',
     'Allocation',
-    'AssemblyStage',
-    'MachineTrial',
-    'DispatchOrder',
     'ServiceTicket',
     'AuditLog',
     'CrmMaster',
     'Session',
-    'MasterLookup',
-    'MasterDomain',
     'StageMaster',
     'DesignMaster',
     'MaterialRequest',

@@ -1,15 +1,16 @@
 'use client';
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import {
   Users,
-  Compass,
-  FileCode2,
-  Calendar
+  Layers,
+  Calendar,
+  FolderGit2
 } from 'lucide-react';
 import { useGetProjectsQuery } from '../../../project-setup/api/projectApi';
+import SearchableSelect, { SearchableSelectOption } from '../../../../components/ui/SearchableSelect';
 
 interface DesignDashboardHeaderProps {
   selectedProjectId?: string;
@@ -17,11 +18,11 @@ interface DesignDashboardHeaderProps {
 }
 
 export default function DesignDashboardHeader({
-  selectedProjectId,
+  selectedProjectId = '',
   onProjectChange
 }: DesignDashboardHeaderProps) {
   const pathname = usePathname();
-  const { data: projectData } = useGetProjectsQuery({});
+  const { data: projectData } = useGetProjectsQuery({ approvedOnly: 'true' });
   const projects = projectData?.projects || [];
 
   const reportingDateStr = new Date().toLocaleDateString('en-IN', {
@@ -39,17 +40,19 @@ export default function DesignDashboardHeader({
     },
     {
       id: 'activity-reports',
-      label: 'Mechanical Design Activity',
+      label: 'Design Activity',
       path: '/design/dashboard/activity-reports',
-      icon: Compass
-    },
-    {
-      id: 'document-control',
-      label: 'Drawing & Document Control',
-      path: '/design/dashboard/document-control',
-      icon: FileCode2
+      icon: Layers
     }
   ];
+
+  const projectSelectOptions = useMemo<SearchableSelectOption[]>(() => {
+    return projects.map((p: any) => ({
+      value: p.projectId,
+      label: p.workOrderNumber || p.projectId,
+      subLabel: `${p.customerName} • ${p.machineModel}`
+    }));
+  }, [projects]);
 
   return (
     <div className="space-y-4">
@@ -57,48 +60,32 @@ export default function DesignDashboardHeader({
       <div className="bg-white rounded-2xl border border-slate-200 border-t-4 border-t-amber-400 p-4 sm:p-5 shadow-xs flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div className="flex items-center gap-3.5">
           <div className="w-10 h-10 rounded-xl bg-amber-500/15 text-amber-700 border border-amber-300/40 flex items-center justify-center shrink-0 shadow-xs">
-            <Compass size={22} className="text-orange-600" />
+            <Users size={22} className="text-orange-600" />
           </div>
           <div>
             <h1 className="text-base font-extrabold text-slate-900 tracking-tight">
               Design & Mechanical Engineering Dashboard
             </h1>
-            <div className="flex items-center gap-2 mt-0.5">
-              <span className="text-[11px] font-medium text-slate-500">
-                Machine House — Winding Technologies
-              </span>
-              <span className="text-slate-300">•</span>
-              <span className="text-[11px] font-semibold text-orange-600">
-                Live Engineering Intelligence
-              </span>
-            </div>
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-3">
-          {/* Project Selector */}
+          {/* Universal Keyword-Searchable Project Selector */}
           {onProjectChange && (
-            <div className="flex items-center gap-2">
-              <label className="text-xs font-bold text-slate-600 shrink-0">
-                Project:
-              </label>
-              <select
-                value={selectedProjectId || ''}
-                onChange={(e) => onProjectChange(e.target.value)}
-                className="px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-none cursor-pointer"
-              >
-                <option value="">All Projects</option>
-                {projects.map((p: any) => (
-                  <option key={p.projectId} value={p.projectId}>
-                    {p.projectId} ({p.customerName})
-                  </option>
-                ))}
-              </select>
-            </div>
+            <SearchableSelect
+              label="Work Order"
+              value={selectedProjectId}
+              onChange={(val) => onProjectChange(val === 'ALL' ? '' : val)}
+              options={projectSelectOptions}
+              allOptionLabel="All Projects"
+              placeholder="Search Work Order..."
+              icon={FolderGit2}
+              className="w-56 sm:w-64"
+            />
           )}
 
           {/* Date Chip */}
-          <div className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600">
+          <div className="flex items-center gap-1.5 px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-600">
             <Calendar size={14} className="text-orange-500" />
             <span>{reportingDateStr}</span>
           </div>

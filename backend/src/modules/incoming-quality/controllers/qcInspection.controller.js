@@ -1,5 +1,6 @@
 import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
+import { generateUniqueSequenceCode } from '../../../utils/sequenceGenerator.js';
 
 const getActorName = (user) => {
   if (!user) return 'System';
@@ -38,8 +39,13 @@ export const getInspections = async (req, res, next) => {
 
 export const createInspection = async (req, res, next) => {
   try {
-    const count = await prisma.qcInspection.count();
-    const inspectionNumber = `QC-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const inspectionNumber = await generateUniqueSequenceCode({
+      model: 'qcInspection',
+      field: 'inspectionNumber',
+      prefix: `QC-${new Date().getFullYear()}-`,
+      startSeq: 1,
+      padLength: 4
+    });
     const actorName = getActorName(req.user);
 
     const {
@@ -58,7 +64,7 @@ export const createInspection = async (req, res, next) => {
       inspectorRemarks = ''
     } = req.body;
 
-    const cleanPrj = String(projectId || 'PRJ-2026-1001').toUpperCase().trim();
+    const cleanPrj = String(projectId || 'WO-2026-1001').toUpperCase().trim();
     const cleanPo = String(poNumber || 'PO-2026-0001').toUpperCase().trim();
     const cleanCode = String(itemCode).toUpperCase().trim();
 
@@ -142,10 +148,16 @@ export const createInspection = async (req, res, next) => {
         });
       }
 
-      const countAlloc = await prisma.stockAllocation.count();
+      const allocationNumber = await generateUniqueSequenceCode({
+        model: 'stockAllocation',
+        field: 'allocationNumber',
+        prefix: 'ALC-',
+        startSeq: 1,
+        padLength: 4
+      });
       await prisma.stockAllocation.create({
         data: {
-          allocationNumber: `ALC-${String(countAlloc + 1).padStart(4, '0')}`,
+          allocationNumber,
           projectId: cleanPrj,
           itemCode: cleanCode,
           itemName: itemName || cleanCode,

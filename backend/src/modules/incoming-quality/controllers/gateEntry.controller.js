@@ -1,5 +1,6 @@
 import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
+import { generateUniqueSequenceCode } from '../../../utils/sequenceGenerator.js';
 
 const getActorName = (user) => {
   if (!user) return 'System';
@@ -38,8 +39,13 @@ export const getGateEntries = async (req, res, next) => {
 
 export const createGateEntry = async (req, res, next) => {
   try {
-    const count = await prisma.gateEntry.count();
-    const gateEntryNumber = `GE-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const gateEntryNumber = await generateUniqueSequenceCode({
+      model: 'gateEntry',
+      field: 'gateEntryNumber',
+      prefix: `GE-${new Date().getFullYear()}-`,
+      startSeq: 1,
+      padLength: 4
+    });
     const actorName = getActorName(req.user);
 
     const { poNumber, projectId, vendorName, challanOrInvoiceNumber = '', vehicleNumber = '', itemsCount = 1, notes = '' } = req.body;
@@ -48,7 +54,7 @@ export const createGateEntry = async (req, res, next) => {
       data: {
         gateEntryNumber,
         poNumber: String(poNumber || 'PO-2026-0001').toUpperCase(),
-        projectId: String(projectId || 'PRJ-2026-1001').toUpperCase(),
+        projectId: String(projectId || 'WO-2026-1001').toUpperCase(),
         vendorName: vendorName || 'Approved Vendor',
         challanOrInvoiceNumber,
         vehicleNumber,

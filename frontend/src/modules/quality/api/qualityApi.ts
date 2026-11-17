@@ -51,7 +51,7 @@ export const qualityApi = apiSlice.injectEndpoints({
         url: '/quality/masters',
         params
       }),
-      providesTags: ['MasterLookup']
+      providesTags: ['QcInspection']
     })
   })
 });

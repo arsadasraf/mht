@@ -15,7 +15,14 @@ export const DEFAULT_DESIGN_PREFIX_POLICY = {
   bomPrefix: 'BOM',
   ecoPrefix: 'ECO',
   lockBomOnFreeze: true,
-  autoSendNetDemandToPurchase: true
+  autoSendNetDemandToPurchase: true,
+  activeTeamUserIds: [],
+  approvalRequired: true,
+  approverRole: 'HEAD_OF_DESIGN',
+  approverUserIds: [],
+  lockMode: 'IMMEDIATE_ON_APPROVAL',
+  lockWindowHours: 0,
+  ecrRequiredAfterLock: true
 };
 
 export const ensureDefaultDesignMasters = async (user = null) => {
@@ -93,6 +100,15 @@ export const getDesignMasters = async (req, res, next) => {
 
 export const getDesignTeamUsers = async (req, res, next) => {
   try {
+    const config = await ensureDefaultDesignMasters(req.user);
+    const policy = {
+      ...DEFAULT_DESIGN_PREFIX_POLICY,
+      ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
+    };
+    const activeTeamIds = Array.isArray(policy.activeTeamUserIds)
+      ? policy.activeTeamUserIds.map(String)
+      : [];
+
     const allUsers = await prisma.user.findMany({
       where: { isActive: true },
       include: { role: true },
@@ -121,6 +137,7 @@ export const getDesignTeamUsers = async (req, res, next) => {
         u.role?.slug === 'design-engineer' ||
         u.role?.slug === 'super-admin' ||
         u.department === 'DESIGN_ENGINEERING';
+      const isInTeam = activeTeamIds.includes(String(u.id));
 
       return {
         id: u.id,
@@ -143,14 +160,95 @@ export const getDesignTeamUsers = async (req, res, next) => {
           ? 'Super Admin (Unrestricted)'
           : isLead
           ? 'Lead Design & CAD Distribution'
-          : 'Design Module Operator'
+          : 'Design Module Operator',
+        isInTeam
       };
     });
 
     res.status(200).json({
       success: true,
       count: formatted.length,
-      users: formatted
+      activeTeamCount: formatted.filter((u) => u.isInTeam).length,
+      users: formatted,
+      activeTeamMembers: formatted.filter((u) => u.isInTeam)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const updateDesignTeamMembership = async (req, res, next) => {
+  try {
+    const { userId, isInTeam, activeTeamUserIds } = req.body;
+    const config = await ensureDefaultDesignMasters(req.user);
+    const actorName = getActorName(req.user);
+
+    const currentPolicy = {
+      ...DEFAULT_DESIGN_PREFIX_POLICY,
+      ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
+    };
+
+    let nextActiveIds = Array.isArray(currentPolicy.activeTeamUserIds)
+      ? [...currentPolicy.activeTeamUserIds.map(String)]
+      : [];
+
+    let targetUserName = '';
+
+    if (Array.isArray(activeTeamUserIds)) {
+      nextActiveIds = Array.from(new Set(activeTeamUserIds.map(String).filter(Boolean)));
+    } else if (userId) {
+      const targetUser = await prisma.user.findUnique({
+        where: { id: String(userId) },
+        select: { firstName: true, lastName: true, email: true }
+      });
+      targetUserName = targetUser
+        ? `${targetUser.firstName || ''} ${targetUser.lastName || ''}`.trim() || targetUser.email
+        : 'User';
+
+      if (isInTeam) {
+        if (!nextActiveIds.includes(String(userId))) {
+          nextActiveIds.push(String(userId));
+        }
+      } else {
+        nextActiveIds = nextActiveIds.filter((id) => id !== String(userId));
+      }
+    } else {
+      return res.status(400).json({
+        success: false,
+        message: 'userId and isInTeam (or activeTeamUserIds) are required.'
+      });
+    }
+
+    const updatedConfig = await prisma.designMasterConfig.update({
+      where: { id: config.id },
+      data: {
+        prefixLockPolicy: {
+          ...currentPolicy,
+          activeTeamUserIds: nextActiveIds
+        },
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
+    });
+
+    await logAuditEvent({
+      req,
+      action: 'DESIGN_TEAM_MEMBERSHIP_UPDATED',
+      module: 'design',
+      entityId: config.id,
+      entityType: 'DesignMasterConfig',
+      notes: targetUserName
+        ? `${targetUserName} was ${isInTeam ? 'added to' : 'removed from'} the Design Team by ${actorName}.`
+        : `Design team membership updated by ${actorName}. Active count: ${nextActiveIds.length}`
+    });
+
+    res.status(200).json({
+      success: true,
+      message: targetUserName
+        ? `All set! ${targetUserName} has been ${isInTeam ? 'added to' : 'removed from'} the Design Team.`
+        : 'All set! Design Team roster updated successfully.',
+      activeTeamCount: nextActiveIds.length,
+      prefixLockPolicy: updatedConfig.prefixLockPolicy
     });
   } catch (error) {
     next(error);

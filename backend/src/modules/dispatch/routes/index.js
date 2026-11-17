@@ -1,8 +1,8 @@
 import { Router } from 'express';
-import dispatchRoutes from './dispatch.routes.js';
+import dispatchMasterRoutes from './dispatchMaster.routes.js';
 
 const router = Router();
 
-router.use('/', dispatchRoutes);
+router.use('/masters', dispatchMasterRoutes);
 
 export default router;

@@ -11,7 +11,11 @@ export const getRoles = async (req, res, next) => {
     const roles = await prisma.role.findMany({
       orderBy: { createdAt: 'asc' }
     });
-    res.status(200).json({ success: true, count: roles.length, roles });
+    res.status(200).json({
+      success: true,
+      count: roles.length,
+      roles: roles.map((r) => ({ ...r, _id: r.id }))
+    });
   } catch (error) {
     next(error);
   }
@@ -25,6 +29,14 @@ export const updateRolePermissions = async (req, res, next) => {
     const existingRole = await prisma.role.findUnique({ where: { id } });
     if (!existingRole) {
       return res.status(404).json({ success: false, message: 'Role not found.' });
+    }
+
+    // Protect Super Admin system role from unauthorized modifications
+    if (existingRole.slug === 'super-admin' && !req.user?.isSuperAdmin) {
+      return res.status(403).json({
+        success: false,
+        message: 'Only the designated Super Administrator can modify Super Admin permissions.'
+      });
     }
 
     const beforeRoutes = [...(existingRole.allowedRoutes || [])];

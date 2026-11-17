@@ -16,19 +16,15 @@ const rolesData = [
     name: 'Master Data Administrator',
     slug: 'master-admin',
     description:
-      'Manages enterprise master catalogues: items, vendors, customers, locations, categories, assemblies, company profile, and global settings',
+      'Manages enterprise master catalogues across modules: CRM, Design, Purchase, Store, Production, and Dispatch',
     allowedRoutes: [
-      '/masters/vendors',
-      '/masters/customers',
-      '/masters/locations',
-      '/masters/categories',
-      '/masters/rm-items',
-      '/masters/bo-items',
-      '/masters/components',
-      '/masters/subassemblies',
-      '/masters/assemblies',
-      '/masters/company-profile',
-      '/masters/settings'
+      '/crm/masters',
+      '/project-setup/masters',
+      '/design/masters',
+      '/purchase/masters',
+      '/store/master',
+      '/production-trial/masters',
+      '/dispatch/masters'
     ],
     isSystemRole: true
   },
@@ -48,9 +44,12 @@ const rolesData = [
       '/design/masters',
       '/purchase/orders',
       '/store/inventory',
-      '/production-trial/assembly',
-      '/production-trial/trials',
-      '/dispatch/verification',
+      '/production-trial/dashboard',
+      '/production-trial/projects',
+      '/production-trial/masters',
+      '/dispatch/dashboard',
+      '/dispatch/projects',
+      '/dispatch/masters',
       '/after-sales/warranty'
     ],
     isSystemRole: true
@@ -89,7 +88,8 @@ const rolesData = [
     allowedRoutes: [
       '/incoming-quality/gate-entry',
       '/incoming-quality/inspections',
-      '/production-trial/trials',
+      '/dispatch/dashboard',
+      '/dispatch/projects',
       '/project-setup/projects'
     ],
     isSystemRole: true
@@ -98,10 +98,10 @@ const rolesData = [
     name: 'Store Keeper',
     slug: 'store-keeper',
     description:
-      'Maintains 4-bucket inventory ledgers, hard stock allocation locks, and shopfloor issues',
+      'Maintains 4-bucket inventory ledgers, material issues, and store masters',
     allowedRoutes: [
       '/store/inventory',
-      '/store/allocations',
+      '/store/master',
       '/incoming-quality/gate-entry',
       '/project-setup/projects'
     ],
@@ -113,8 +113,11 @@ const rolesData = [
     description:
       'Executes mechanical & electrical assembly stages, records stage-gate checkpoints',
     allowedRoutes: [
-      '/production-trial/assembly',
-      '/production-trial/trials',
+      '/production-trial/dashboard',
+      '/production-trial/projects',
+      '/production-trial/masters',
+      '/dispatch/dashboard',
+      '/dispatch/projects',
       '/store/inventory',
       '/project-setup/projects'
     ],
@@ -124,8 +127,13 @@ const rolesData = [
     name: 'Dispatch Officer',
     slug: 'dispatch-officer',
     description:
-      'Enforces Zero-Snag block, generates gate passes, and prepares shipping dossiers',
-    allowedRoutes: ['/dispatch/verification', '/project-setup/projects'],
+      'Oversees inspection checklist progress, attaches sub-stages, and coordinates vehicle dispatch',
+    allowedRoutes: [
+      '/dispatch/dashboard',
+      '/dispatch/projects',
+      '/dispatch/masters',
+      '/project-setup/projects'
+    ],
     isSystemRole: true
   },
   {

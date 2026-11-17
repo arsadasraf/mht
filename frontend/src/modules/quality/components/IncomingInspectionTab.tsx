@@ -479,11 +479,11 @@ export default function IncomingInspectionTab() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Project
+                    Work Order No.
                   </label>
                   <input
                     type="text"
-                    placeholder="Project ID"
+                    placeholder="WO-2026-1001"
                     value={qcForm.projectId}
                     onChange={(e) =>
                       setQcForm({ ...qcForm, projectId: e.target.value })
@@ -665,11 +665,11 @@ export default function IncomingInspectionTab() {
 
                 <div>
                   <label className="block text-xs font-bold text-slate-700 mb-1">
-                    Project
+                    Work Order No.
                   </label>
                   <input
                     type="text"
-                    placeholder="Project ID"
+                    placeholder="WO-2026-1001"
                     value={gateForm.projectId}
                     onChange={(e) =>
                       setGateForm({ ...gateForm, projectId: e.target.value })

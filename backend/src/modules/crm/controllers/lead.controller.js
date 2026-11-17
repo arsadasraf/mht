@@ -1,6 +1,7 @@
 import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
 import { ensureCrmMasterConfig, DEFAULT_CRM_PREFIX_LOCK_POLICY } from './crmMaster.controller.js';
+import { generateUniqueSequenceCode } from '../../../utils/sequenceGenerator.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -88,13 +89,17 @@ async function generateNextLeadNumber(user) {
     ...DEFAULT_CRM_PREFIX_LOCK_POLICY,
     ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
   };
-  const prefix = (policy.enquiryPrefix || 'ENQ-').trim().toUpperCase();
+  const prefix = (policy.enquiryPrefix || 'ENQ-').trim().toUpperCase().replace(/-+$/, '');
   const startSeq = Number(policy.enquiryStartSeq) || 1001;
   const year = new Date().getFullYear();
 
-  const count = await prisma.lead.count();
-  const nextNum = Math.max(startSeq + count, count + 1);
-  return `${prefix}${year}-${String(nextNum).padStart(4, '0')}`;
+  return generateUniqueSequenceCode({
+    model: 'lead',
+    field: 'leadNumber',
+    prefix: `${prefix}-${year}-`,
+    startSeq,
+    padLength: 4
+  });
 }
 
 /**

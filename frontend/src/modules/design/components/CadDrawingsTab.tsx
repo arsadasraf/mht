@@ -8,7 +8,7 @@ import { useGetDrawingsQuery } from '../api/designApi';
 export default function CadDrawingsTab() {
   const { activeProjectId } = useAppSelector((state) => state.ui);
   const { user } = useAppSelector((state) => state.auth);
-  const { data, isLoading } = useGetDrawingsQuery({ projectId: activeProjectId || 'PRJ-2026-001' });
+  const { data, isLoading } = useGetDrawingsQuery({ projectId: activeProjectId || 'WO-2026-1001' });
 
   const [activeViewerDrawing, setActiveViewerDrawing] = useState<any>(null);
 

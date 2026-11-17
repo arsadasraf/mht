@@ -37,7 +37,7 @@ export default function FgReceiptModal({ isOpen, onClose, onSubmitSuccess }: FgR
       dispatch(
         addToast({
           type: 'warning',
-          message: 'Please link this Finished Goods inward to a Project ID.'
+          message: 'Please link this Finished Goods inward to a Work Order Number.'
         })
       );
       return;
@@ -120,12 +120,12 @@ export default function FgReceiptModal({ isOpen, onClose, onSubmitSuccess }: FgR
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Project / Work Order ID <span className="text-red-500">*</span>
+                Work Order No. <span className="text-red-500">*</span>
               </label>
               <input
                 type="text"
                 required
-                placeholder="PRJ-2026-XXXX"
+                placeholder="WO-2026-1001"
                 value={formData.projectId}
                 onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-orange-500/30 focus:border-orange-500 font-mono"

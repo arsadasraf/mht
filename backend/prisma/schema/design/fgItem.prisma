@@ -6,6 +6,7 @@ model FgItemMaster {
   categoryName     String?      @default("")
   revision         String       @default("Rev 1.0") // e.g. "Rev 1.0", "Rev 2.0"
   description      String?      @default("")
+  make             String       @default("") // Make / Brand / Manufacturer
 
   // Storage & Inventory (Primary UOM only - Zero Dual Unit)
   uom              String       @default("Nos") // Primary Unit

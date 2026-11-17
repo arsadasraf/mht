@@ -91,6 +91,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
   // Column-Based Excel Filters State for FG
   const [fgExcelFilters, setFgExcelFilters] = useState<{
     name: string[] | null;
+    revision: string[] | null;
     classification: string[] | null;
     category: string[] | null;
     uom: string[] | null;
@@ -99,6 +100,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
     status: string[] | null;
   }>({
     name: null,
+    revision: null,
     classification: null,
     category: null,
     uom: null,
@@ -131,6 +133,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
     itemType: 'RM_BO' | 'FG';
     itemCode: string;
     itemName: string;
+    revisionNumber?: string;
     description: string;
     category: string;
     make: string;
@@ -148,6 +151,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
     itemType: 'RM_BO',
     itemCode: '',
     itemName: '',
+    revisionNumber: '',
     description: '',
     category: '',
     make: '',
@@ -239,14 +243,16 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
     return rows;
   }, [rmItems, agreements]);
 
-  // Merged Table Rows for FG Items
+  // Merged Table Rows for FG Items (Design Drawings with Revision Support)
   const mergedFgRows = useMemo(() => {
     const rows = fgItems.map((item: any) => {
+      const itemRev = item.revision || 'Rev 1.0';
       const agr = agreements.find(
         (a: any) =>
           (a.itemCode?.toLowerCase() === item.name?.toLowerCase() ||
             a.itemName?.toLowerCase() === item.name?.toLowerCase()) &&
-          ['FG', 'COMPONENT', 'SUB_ASSEMBLY', 'ASSEMBLY'].includes(a.itemType?.toUpperCase())
+          ['FG', 'COMPONENT', 'SUB_ASSEMBLY', 'ASSEMBLY'].includes(a.itemType?.toUpperCase()) &&
+          (!a.revisionNumber || a.revisionNumber.toLowerCase() === itemRev.toLowerCase())
       );
 
       const unitPrice = agr ? agr.unitPrice : 0;
@@ -260,7 +266,9 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
         agreementId: agr?.id,
         itemCode: item.name,
         name: item.name,
+        revision: itemRev,
         description: item.description || '',
+        make: item.make || '',
         classification: item.classification || 'COMPONENT',
         category: item.categoryName || 'Machined Parts',
         uom: item.uom || 'Nos',
@@ -284,8 +292,11 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
         ['FG', 'COMPONENT', 'SUB_ASSEMBLY', 'ASSEMBLY'].includes(a.itemType?.toUpperCase())
       )
       .forEach((agr: any) => {
+        const agrRev = agr.revisionNumber || 'Rev 1.0';
         const alreadyIncluded = rows.some(
-          (r: any) => r.itemCode?.toLowerCase() === agr.itemCode?.toLowerCase()
+          (r: any) =>
+            r.itemCode?.toLowerCase() === agr.itemCode?.toLowerCase() &&
+            r.revision?.toLowerCase() === agrRev.toLowerCase()
         );
         if (!alreadyIncluded) {
           rows.push({
@@ -293,7 +304,9 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
             agreementId: agr.id,
             itemCode: agr.itemCode,
             name: agr.itemName || agr.itemCode,
+            revision: agrRev,
             description: agr.description || '',
+            make: '',
             classification: agr.itemType || 'COMPONENT',
             category: agr.category || 'General',
             uom: agr.uom || 'Nos',
@@ -353,6 +366,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
     };
     return {
       name: build((r) => r.name),
+      revision: build((r) => r.revision),
       classification: build((r) => r.classification),
       category: build((r) => r.category),
       uom: build((r) => r.uom),
@@ -408,6 +422,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
         const matches =
           r.name?.toLowerCase().includes(q) ||
           r.itemCode?.toLowerCase().includes(q) ||
+          r.revision?.toLowerCase().includes(q) ||
           r.description?.toLowerCase().includes(q) ||
           r.classification?.toLowerCase().includes(q) ||
           r.category?.toLowerCase().includes(q) ||
@@ -415,6 +430,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
         if (!matches) return false;
       }
       if (fgExcelFilters.name && !fgExcelFilters.name.includes(r.name || '(Blanks)')) return false;
+      if (fgExcelFilters.revision && !fgExcelFilters.revision.includes(r.revision || '(Blanks)')) return false;
       if (fgExcelFilters.classification && !fgExcelFilters.classification.includes(r.classification || '(Blanks)')) return false;
       if (fgExcelFilters.category && !fgExcelFilters.category.includes(r.category || '(Blanks)')) return false;
       if (fgExcelFilters.uom && !fgExcelFilters.uom.includes(r.uom || '(Blanks)')) return false;
@@ -461,6 +477,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
     } else {
       setFgExcelFilters({
         name: null,
+        revision: null,
         classification: null,
         category: null,
         uom: null,
@@ -480,6 +497,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
         itemType: isRm ? 'RM_BO' : 'FG',
         itemCode: item.itemCode || item.name,
         itemName: item.name || item.itemCode,
+        revisionNumber: item.revision || (isRm ? '' : 'Rev 1.0'),
         description: item.description || '',
         category: item.category || '',
         make: item.make || '',
@@ -500,6 +518,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
         itemType: isRm ? 'RM_BO' : 'FG',
         itemCode: '',
         itemName: '',
+        revisionNumber: isRm ? '' : 'Rev 1.0',
         description: '',
         category: '',
         make: '',
@@ -556,16 +575,19 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
 
     if (found) {
       // Look for existing price agreement for this item
+      const itemRev = !isRm ? (found.revision || 'Rev 1.0') : '';
       const existingAgr = agreements.find(
         (a: any) =>
-          a.itemCode?.toLowerCase() === found.name?.toLowerCase() ||
-          a.itemName?.toLowerCase() === found.name?.toLowerCase()
+          (a.itemCode?.toLowerCase() === found.name?.toLowerCase() ||
+            a.itemName?.toLowerCase() === found.name?.toLowerCase()) &&
+          (!itemRev || !a.revisionNumber || a.revisionNumber.toLowerCase() === itemRev.toLowerCase())
       );
 
       setFormData((prev) => ({
         ...prev,
         itemCode: found.name,
         itemName: found.name,
+        revisionNumber: itemRev,
         description: found.description || '',
         category: found.categoryName || '',
         make: found.make || '',
@@ -605,6 +627,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
       const payload: any = {
         itemCode: formData.itemCode || formData.itemName,
         itemName: formData.itemName || formData.itemCode,
+        revisionNumber: formData.revisionNumber || '',
         description: formData.description,
         itemType: formData.itemType,
         category: formData.category,
@@ -695,7 +718,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
             }`}
           >
             <Layers className="w-4 h-4" />
-            <span>FG Items</span>
+            <span>Design Drawing</span>
             <span
               className={`px-1.5 py-0.5 rounded-full text-[10px] ${
                 activeSubTab === 'fg'
@@ -723,7 +746,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder={`Search ${activeSubTab === 'rm-bo' ? 'RM & BO items' : 'FG items'} by name, spec, vendor, category...`}
+            placeholder={`Search ${activeSubTab === 'rm-bo' ? 'RM & BO items' : 'Design Drawings'} by name, spec, vendor, category...`}
             className="w-full pl-9 pr-9 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all placeholder:text-slate-400"
           />
           {searchTerm && (
@@ -1025,6 +1048,20 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
                   </th>
                   <th className="py-3 px-3">
                     <ExcelColumnFilter
+                      title="Revision"
+                      columnKey="revision"
+                      distinctValues={fgDistinctValues.revision}
+                      selectedValues={fgExcelFilters.revision}
+                      onFilterChange={(selected) =>
+                        setFgExcelFilters((prev) => ({ ...prev, revision: selected }))
+                      }
+                      currentSortField={sortField}
+                      currentSortDirection={sortDirection}
+                      onSortChange={handleSortChange}
+                    />
+                  </th>
+                  <th className="py-3 px-3">
+                    <ExcelColumnFilter
                       title="Classification"
                       columnKey="classification"
                       distinctValues={fgDistinctValues.classification}
@@ -1116,16 +1153,16 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
               <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
                 {isLoadingFg || isLoadingAgreements ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center text-slate-400">
+                    <td colSpan={11} className="py-12 text-center text-slate-400">
                       Loading FG price records...
                     </td>
                   </tr>
                 ) : filteredFgRows.length === 0 ? (
                   <tr>
-                    <td colSpan={10} className="py-12 text-center">
+                    <td colSpan={11} className="py-12 text-center">
                       <div className="max-w-sm mx-auto text-center space-y-2">
                         <Layers className="w-8 h-8 text-slate-300 mx-auto" />
-                        <p className="text-xs font-bold text-slate-700">No FG items match criteria.</p>
+                        <p className="text-xs font-bold text-slate-700">No Design Drawings match criteria.</p>
                         <p className="text-[11px] text-slate-400">
                           Configure new item rates using the "Configure Price" button above.
                         </p>
@@ -1152,6 +1189,12 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
                             </p>
                           )}
                         </div>
+                      </td>
+
+                      <td className="py-3 px-3">
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+                          {row.revision || 'Rev 1.0'}
+                        </span>
                       </td>
 
                       <td className="py-3 px-3">
@@ -1305,7 +1348,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
                     }`}
                   >
                     <Layers className="w-4 h-4" />
-                    <span>FG Items</span>
+                    <span>Design Drawing</span>
                   </button>
                 </div>
               </div>
@@ -1313,7 +1356,7 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
               {/* Item Selection / Item Details Card */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                  {formData.itemType === 'RM_BO' ? 'Raw Material / Bought Out Item *' : 'Finished Good / Component Item *'}
+                  {formData.itemType === 'RM_BO' ? 'Raw Material / Bought Out Item *' : 'Design Drawing / Component Item *'}
                 </label>
                 {editModal.mode === 'EDIT' ? (
                   <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
@@ -1323,6 +1366,11 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
                         <span className="px-2.5 py-0.5 rounded-lg text-[10px] font-bold bg-orange-100 text-orange-700">
                           {formData.itemType === 'RM_BO' ? 'RM & BO' : 'FG'}
                         </span>
+                        {formData.itemType === 'FG' && (
+                          <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200 shadow-2xs">
+                            {formData.revisionNumber || 'Rev 1.0'}
+                          </span>
+                        )}
                       </div>
                       {formData.description && (
                         <p className="text-xs text-slate-500 italic">{formData.description}</p>
@@ -1351,8 +1399,8 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
                     >
                       <option value="">-- Choose Existing Item to Auto-Fetch UOM & Specs --</option>
                       {(formData.itemType === 'RM_BO' ? rmItems : fgItems).map((i: any) => (
-                        <option key={i.id || i.name} value={i.name}>
-                          {i.name} {i.categoryName ? `• [${i.categoryName}]` : ''} • ({i.uom || 'Nos'})
+                        <option key={i.id || `${i.name}-${i.revision || ''}`} value={i.name}>
+                          {i.name} {i.revision ? `• [${i.revision}]` : ''} {i.categoryName ? `• [${i.categoryName}]` : ''} • ({i.uom || 'Nos'})
                         </option>
                       ))}
                     </select>
@@ -1372,6 +1420,23 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
                         className="flex-1 px-3.5 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 placeholder:text-slate-400"
                       />
                     </div>
+
+                    {formData.itemType === 'FG' && (
+                      <div className="mt-2 pt-2 border-t border-slate-100 flex items-center gap-3">
+                        <label className="text-xs font-bold text-slate-700 shrink-0">
+                          Revision:
+                        </label>
+                        <input
+                          type="text"
+                          placeholder="e.g. Rev 1.0"
+                          value={formData.revisionNumber || ''}
+                          onChange={(e) =>
+                            setFormData((prev) => ({ ...prev, revisionNumber: e.target.value }))
+                          }
+                          className="w-40 px-3 py-1.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono font-bold text-slate-800"
+                        />
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -1589,6 +1654,14 @@ export default function PriceListTab({ initialSubTab }: PriceListTabProps) {
                       <span className="text-slate-500">Item Name:</span>
                       <span className="font-bold text-slate-900">{previewItem.name}</span>
                     </div>
+                    {previewItem.revision && (
+                      <div className="flex justify-between py-1 border-b border-slate-200/60">
+                        <span className="text-slate-500">Drawing Revision:</span>
+                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-mono font-bold bg-amber-50 text-amber-800 border border-amber-200">
+                          {previewItem.revision}
+                        </span>
+                      </div>
+                    )}
                     {previewItem.description && (
                       <div className="flex justify-between py-1 border-b border-slate-200/60">
                         <span className="text-slate-500">Description:</span>

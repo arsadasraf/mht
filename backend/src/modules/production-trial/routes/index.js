@@ -1,10 +1,8 @@
 import { Router } from 'express';
-import assemblyRoutes from './assembly.routes.js';
-import trialRoutes from './trial.routes.js';
+import productionMasterRoutes from './productionMaster.routes.js';
 
 const router = Router();
 
-router.use('/assembly', assemblyRoutes);
-router.use('/trials', trialRoutes);
+router.use('/masters', productionMasterRoutes);
 
 export default router;

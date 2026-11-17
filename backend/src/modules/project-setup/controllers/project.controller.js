@@ -33,39 +33,164 @@ export const formatMilestone = (m) => ({
     : null
 });
 
-export const formatProject = (p) => ({
-  ...p,
-  _id: p.id,
-  productDescription: p.productDescription || '',
-  deliveryCommitmentDate: p.deliveryCommitmentDate || null,
-  customerPoRef: p.customerPoNumber
-    ? {
-        _id: p.customerPoId,
-        poNumber: p.customerPoNumber,
-        totalAmount: p.contractValue
+export const formatProject = (p, poDoc = null, bomDoc = null) => {
+  const attachedDrawings = Array.isArray(bomDoc?.summary?.attachedDrawings)
+    ? bomDoc.summary.attachedDrawings
+    : [];
+  const bomItems = Array.isArray(bomDoc?.items) ? bomDoc.items : [];
+  const isAttached = Boolean(bomDoc && (attachedDrawings.length > 0 || bomItems.length > 0));
+  const isBomLocked = Boolean(bomDoc?.isFrozen || bomDoc?.approvalStatus === 'LOCKED_FREEZE');
+  const bomStatus = isBomLocked
+    ? 'LOCKED_FREEZE'
+    : bomDoc?.approvalStatus || (isAttached ? 'DRAFT' : 'NOT_ATTACHED');
+
+  return {
+    ...p,
+    _id: p.id,
+    projectId: p.workOrderNumber || p.projectId,
+    workOrderNumber: p.workOrderNumber || p.projectId,
+    productDescription: p.productDescription || '',
+    deliveryCommitmentDate: p.deliveryCommitmentDate || null,
+    costCenter: p.contractValue?.costCenter || 'Modification',
+    techSpec: p.contractValue?.techSpec || 'NA',
+    poReceiptDate: poDoc?.poDate || p.contractValue?.poReceiptDate || null,
+    poItems: Array.isArray(poDoc?.items) && poDoc.items.length > 0
+      ? poDoc.items
+      : Array.isArray(p.contractValue?.poItems)
+      ? p.contractValue.poItems
+      : [],
+    revisions: Array.isArray(p.contractValue?.revisions) ? p.contractValue.revisions : [],
+    approvedById: p.approvedById || p.contractValue?.approvedById || null,
+    approvedByName: p.approvedByName || p.contractValue?.approvedByName || '',
+    approvedAt: p.approvedAt || p.contractValue?.approvedAt || null,
+    customerPoRef: p.customerPoNumber
+      ? {
+          _id: p.customerPoId,
+          poNumber: p.customerPoNumber,
+          poDate: poDoc?.poDate || p.contractValue?.poReceiptDate || null,
+          totalAmount: p.contractValue
+        }
+      : null,
+    milestones: Array.isArray(p.milestones) ? p.milestones.map(formatMilestone) : undefined,
+    // Real-Time Global Drawing BOM & BOQ Attachment Info
+    bomAttached: isAttached,
+    bomStatus,
+    isBomLocked,
+    attachedDrawingsCount: attachedDrawings.length,
+    attachedDrawings,
+    bomSummary: bomDoc?.summary || null,
+    bomItems,
+    bomId: bomDoc?.id || null,
+    bomNumber: bomDoc?.bomNumber || null
+  };
+};
+
+export const generateNextWorkOrderNumber = async (policy = {}) => {
+  const currentYear = new Date().getFullYear();
+  const woPrefix = String(policy.workOrderPrefix || 'WO')
+    .trim()
+    .replace(/-+$/, '')
+    .toUpperCase() || 'WO';
+  const startSeq = Number(policy.workOrderStartSeq || policy.projectStartSeq) || 1001;
+
+  const existingProjects = await prisma.project.findMany({
+    select: { workOrderNumber: true, projectId: true }
+  });
+
+  let maxSeq = startSeq - 1;
+  const usedNumbers = new Set();
+
+  for (const prj of existingProjects) {
+    const wo = String(prj.workOrderNumber || '').trim().toUpperCase();
+    const pid = String(prj.projectId || '').trim().toUpperCase();
+    if (wo) usedNumbers.add(wo);
+    if (pid) usedNumbers.add(pid);
+
+    const match = wo.match(/(\d+)$/);
+    if (match) {
+      const num = parseInt(match[1], 10);
+      if (!isNaN(num) && num >= startSeq && num < 1000000 && num > maxSeq) {
+        maxSeq = num;
       }
-    : null,
-  milestones: Array.isArray(p.milestones) ? p.milestones.map(formatMilestone) : undefined
-});
+    }
+  }
+
+  let nextSeq = Math.max(maxSeq + 1, startSeq + existingProjects.length);
+  let candidate = `${woPrefix}-${currentYear}-${String(nextSeq).padStart(4, '0')}`;
+  while (usedNumbers.has(candidate)) {
+    nextSeq++;
+    candidate = `${woPrefix}-${currentYear}-${String(nextSeq).padStart(4, '0')}`;
+  }
+  return candidate;
+};
+
+/**
+ * Checks whether Edit or Delete is permitted under the Master Time Policy (0 to Unlimited hours).
+ */
+export const checkTimeWindowAllowed = (project, policy = {}, actionType = 'EDIT') => {
+  const isEdit = actionType === 'EDIT';
+  const mode = isEdit
+    ? String(policy.editTimeLimitMode || 'UNLIMITED').toUpperCase()
+    : String(policy.deleteTimeLimitMode || 'UNLIMITED').toUpperCase();
+
+  if (mode === 'UNLIMITED') {
+    return { allowed: true };
+  }
+
+  const limitHours = Number(
+    isEdit ? policy.editTimeLimitHours ?? 0 : policy.deleteTimeLimitHours ?? 0
+  );
+  const actionLabel = isEdit ? 'editing' : 'deleting';
+
+  if (isNaN(limitHours) || limitHours <= 0) {
+    return {
+      allowed: false,
+      message: `Just a heads up: ${actionLabel} Work Orders is locked (0 hours time limit) per the Project Setup Master Time Policy.`
+    };
+  }
+
+  const createdAtMs = project.createdAt ? new Date(project.createdAt).getTime() : Date.now();
+  const elapsedHours = (Date.now() - createdAtMs) / (1000 * 60 * 60);
+
+  if (elapsedHours > limitHours) {
+    return {
+      allowed: false,
+      message: `Just a heads up: the ${limitHours}-hour time window for ${actionLabel} Work Order "${project.workOrderNumber}" has expired.`
+    };
+  }
+
+  return { allowed: true };
+};
 
 export const getProjects = async (req, res, next) => {
   try {
-    const { status, stage, search, departmentModule, page = 1, limit = 50 } = req.query;
+    const { status, stage, search, departmentModule, approvedOnly, page = 1, limit = 50 } = req.query;
     const where = {};
 
-    if (status) where.status = String(status);
+    if (status) {
+      where.status = String(status);
+    } else if (departmentModule || approvedOnly === 'true') {
+      // Unapproved Work Orders (status === 'CREATED') must NEVER be shown in downstream department modules
+      where.status = { not: 'CREATED' };
+    }
+
     if (stage) where.currentStage = String(stage);
     if (departmentModule) {
       const mod = String(departmentModule).trim().toLowerCase();
-      where.milestones = {
-        some: {
-          OR: [
-            { departmentModule: { equals: mod, mode: 'insensitive' } },
-            { stageCode: { contains: mod, mode: 'insensitive' } },
-            { title: { contains: mod, mode: 'insensitive' } }
-          ]
-        }
-      };
+      // For approved projects, department modules should see all active/approved Work Orders.
+      // If approvedOnly is true, or if department is production/purchase/dispatch,
+      // include projects whose milestones match OR projects that are active/approved in the system.
+      if (approvedOnly !== 'true' && mod !== 'production' && mod !== 'purchase' && mod !== 'dispatch') {
+        where.milestones = {
+          some: {
+            OR: [
+              { departmentModule: { equals: mod, mode: 'insensitive' } },
+              { stageCode: { contains: mod, mode: 'insensitive' } },
+              { title: { contains: mod, mode: 'insensitive' } }
+            ]
+          }
+        };
+      }
     }
     if (search) {
       const q = String(search).trim();
@@ -98,11 +223,64 @@ export const getProjects = async (req, res, next) => {
       })
     ]);
 
+    const poIds = Array.from(
+      new Set(projects.map((p) => p.customerPoId).filter((id) => id && UUID_REGEX.test(String(id))))
+    );
+    const poMap = new Map();
+    if (poIds.length > 0) {
+      const pos = await prisma.customerPo
+        .findMany({
+          where: { id: { in: poIds } },
+          include: { items: { orderBy: { slNo: 'asc' } } }
+        })
+        .catch(() => []);
+      pos.forEach((po) => poMap.set(po.id, po));
+    }
+
+    // Batch lookup BOM & BOQ attached data for projects
+    const projectKeys = Array.from(
+      new Set(
+        projects
+          .flatMap((p) => [p.projectId, p.workOrderNumber])
+          .filter(Boolean)
+          .map((k) => String(k).trim())
+      )
+    );
+    const bomMap = new Map();
+    if (projectKeys.length > 0) {
+      const boms = await prisma.bom
+        .findMany({
+          where: {
+            OR: [
+              { projectId: { in: projectKeys } },
+              { bomNumber: { in: projectKeys } }
+            ]
+          },
+          include: {
+            items: {
+              orderBy: { itemSequence: 'asc' },
+              take: 100
+            }
+          }
+        })
+        .catch(() => []);
+      boms.forEach((b) => {
+        if (b.projectId) bomMap.set(b.projectId, b);
+        if (b.bomNumber) bomMap.set(b.bomNumber, b);
+      });
+    }
+
     res.status(200).json({
       success: true,
       total,
       page: Number(page),
-      projects: projects.map(formatProject)
+      projects: projects.map((p) =>
+        formatProject(
+          p,
+          p.customerPoId ? poMap.get(p.customerPoId) : null,
+          bomMap.get(p.projectId) || bomMap.get(p.workOrderNumber) || null
+        )
+      )
     });
   } catch (error) {
     next(error);
@@ -111,15 +289,34 @@ export const getProjects = async (req, res, next) => {
 
 export const getAvailableCustomerPos = async (req, res, next) => {
   try {
-    const customerPos = await prisma.customerPo.findMany({
-      where: {
-        status: { in: ['RECEIVED', 'OA_ISSUED'] }
-      },
-      include: {
-        items: { orderBy: { slNo: 'asc' } }
-      },
-      orderBy: [{ poDate: 'desc' }, { createdAt: 'desc' }],
-      take: 50
+    const [activeProjects, rawPos] = await Promise.all([
+      prisma.project.findMany({
+        select: { customerPoId: true, customerPoNumber: true, projectId: true }
+      }),
+      prisma.customerPo.findMany({
+        where: {
+          status: 'OA_ISSUED',
+          orderAcceptanceNumber: { not: null },
+          convertedProjectId: null
+        },
+        include: {
+          items: { orderBy: { slNo: 'asc' } }
+        },
+        orderBy: [{ poDate: 'desc' }, { createdAt: 'desc' }],
+        take: 100
+      })
+    ]);
+
+    const usedPoIds = new Set(activeProjects.map((p) => p.customerPoId).filter(Boolean));
+    const usedPoNumbers = new Set(
+      activeProjects.map((p) => (p.customerPoNumber || '').trim().toUpperCase()).filter(Boolean)
+    );
+
+    const customerPos = rawPos.filter((po) => {
+      if (!po.orderAcceptanceNumber || !String(po.orderAcceptanceNumber).trim()) return false;
+      if (usedPoIds.has(po.id)) return false;
+      if (po.poNumber && usedPoNumbers.has(po.poNumber.trim().toUpperCase())) return false;
+      return true;
     });
 
     res.status(200).json({
@@ -166,9 +363,14 @@ export const getProjectById = async (req, res, next) => {
   try {
     const { id } = req.params;
     const isUuid = UUID_REGEX.test(id);
+    const upperId = String(id).trim().toUpperCase();
 
     const project = await prisma.project.findFirst({
-      where: isUuid ? { id } : { projectId: id.toUpperCase() },
+      where: isUuid
+        ? { id }
+        : {
+            OR: [{ workOrderNumber: upperId }, { projectId: upperId }]
+          },
       include: {
         milestones: {
           orderBy: [{ order: 'asc' }, { baselineDate: 'asc' }],
@@ -180,12 +382,39 @@ export const getProjectById = async (req, res, next) => {
     });
 
     if (!project) {
-      return res.status(404).json({ success: false, message: 'Project not found.' });
+      return res.status(404).json({ success: false, message: 'Work Order / Project not found.' });
     }
+
+    let poDoc = null;
+    if (project.customerPoId && UUID_REGEX.test(String(project.customerPoId))) {
+      poDoc = await prisma.customerPo.findUnique({
+        where: { id: String(project.customerPoId) },
+        include: { items: { orderBy: { slNo: 'asc' } } }
+      });
+    }
+
+    // Lookup BOM & BOQ attached data
+    const bomDoc = await prisma.bom
+      .findFirst({
+        where: {
+          OR: [
+            { projectId: project.projectId },
+            { projectId: project.workOrderNumber },
+            { bomNumber: project.projectId },
+            { bomNumber: project.workOrderNumber }
+          ]
+        },
+        include: {
+          items: {
+            orderBy: { itemSequence: 'asc' }
+          }
+        }
+      })
+      .catch(() => null);
 
     res.status(200).json({
       success: true,
-      project: formatProject(project),
+      project: formatProject(project, poDoc, bomDoc),
       milestones: (project.milestones || []).map(formatMilestone)
     });
   } catch (error) {
@@ -201,14 +430,21 @@ export const createProject = async (req, res, next) => {
       ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
     };
 
-    const currentYear = new Date().getFullYear();
-    const count = await prisma.project.count();
-    const seq = (Number(policy.projectStartSeq) || 1001) + count;
-    const prjPrefix = (policy.projectPrefix || 'PRJ').toUpperCase();
-    const woPrefix = (policy.workOrderPrefix || 'WO').toUpperCase();
+    const rawWoInput = (req.body.workOrderNumber || req.body.projectId || '').trim().toUpperCase();
+    const workOrderNumber = rawWoInput || (await generateNextWorkOrderNumber(policy));
+    const projectId = workOrderNumber;
 
-    const projectId = req.body.projectId || `${prjPrefix}-${currentYear}-${seq}`;
-    const workOrderNumber = req.body.workOrderNumber || `${woPrefix}-${currentYear}-${seq}`;
+    const duplicateWo = await prisma.project.findFirst({
+      where: {
+        OR: [{ workOrderNumber }, { projectId: workOrderNumber }]
+      }
+    });
+    if (duplicateWo) {
+      return res.status(400).json({
+        success: false,
+        message: `Just a heads up: Work Order Number "${workOrderNumber}" is already in use. Please enter a unique Work Order Number.`
+      });
+    }
 
     const {
       customerPoId,
@@ -222,6 +458,8 @@ export const createProject = async (req, res, next) => {
       startDate = new Date(),
       targetDispatchDate,
       plantLocation,
+      costCenter,
+      techSpec,
       stages
     } = req.body;
 
@@ -234,6 +472,8 @@ export const createProject = async (req, res, next) => {
     let customerPoUuid = null;
     let customerPoNumber = '';
     let linkedLeadId = null;
+    let resolvedPoReceiptDate = null;
+    let resolvedPoItems = [];
 
     if (customerPoId && UUID_REGEX.test(String(customerPoId))) {
       const poDoc = await prisma.customerPo.findUnique({
@@ -242,9 +482,40 @@ export const createProject = async (req, res, next) => {
       });
 
       if (poDoc) {
+        if (!poDoc.orderAcceptanceNumber || !String(poDoc.orderAcceptanceNumber).trim() || poDoc.status === 'RECEIVED') {
+          return res.status(400).json({
+            success: false,
+            message: `Just a heads up: please generate the Order Acceptance (OA) for Customer PO "${poDoc.poNumber}" in CRM before creating a Project.`
+          });
+        }
+
+        const existingPrjForPo = await prisma.project.findFirst({
+          where: {
+            OR: [
+              { customerPoId: poDoc.id },
+              ...(poDoc.poNumber ? [{ customerPoNumber: poDoc.poNumber }] : [])
+            ]
+          }
+        });
+        if (existingPrjForPo) {
+          return res.status(400).json({
+            success: false,
+            message: `Just a heads up: Work Order "${existingPrjForPo.workOrderNumber}" is already created for Customer PO "${poDoc.poNumber}".`
+          });
+        }
+
         customerPoUuid = poDoc.id;
         customerPoNumber = poDoc.poNumber;
         linkedLeadId = poDoc.leadId;
+        resolvedPoReceiptDate = poDoc.poDate ? new Date(poDoc.poDate).toISOString() : null;
+        resolvedPoItems = (poDoc.items || []).map((it, idx) => ({
+          slNo: it.slNo || idx + 1,
+          partId: it.modelCode || '',
+          rev: '',
+          description: [it.description, it.specifications].filter(Boolean).join(' — '),
+          qty: Number(it.quantity || 1),
+          unit: it.uom || 'Nos.'
+        }));
         resolvedCustomerName = customerName || poDoc.companyName || poDoc.customerName;
 
         const poItemModels = (poDoc.items || [])
@@ -297,6 +568,15 @@ export const createProject = async (req, res, next) => {
       ? new Date(resolvedDispatchDate)
       : (resolvedCommitmentDate || new Date(parsedStartDate.getTime() + 90 * 24 * 60 * 60 * 1000));
 
+    const stageTemplates = Array.isArray(stages) ? stages : [];
+    const approverIds = Array.isArray(policy.approverUserIds) ? policy.approverUserIds.filter(Boolean) : [];
+    const requiresApproval = approverIds.length > 0;
+    const initialStatus = requiresApproval
+      ? 'CREATED'
+      : stageTemplates.length > 0
+      ? 'ASSIGNED_TO_DEPARTMENT'
+      : 'APPROVED';
+
     const project = await prisma.project.create({
       data: {
         projectId,
@@ -312,11 +592,20 @@ export const createProject = async (req, res, next) => {
           currency: resolvedContractValue.currency || 'INR',
           amount: Number(resolvedContractValue.amount || 0),
           exchangeRate: Number(resolvedContractValue.exchangeRate || 1.0),
-          baseAmountINR: calculatedBaseAmount
+          baseAmountINR: calculatedBaseAmount,
+          costCenter: costCenter !== undefined ? String(costCenter).trim() : 'Modification',
+          techSpec: techSpec !== undefined ? String(techSpec).trim() : 'NA',
+          poReceiptDate: resolvedPoReceiptDate,
+          poItems: resolvedPoItems,
+          revisions: [],
+          approvedById: requiresApproval ? null : req.user?.id || null,
+          approvedByName: requiresApproval ? '' : `${actorName} (Auto-Approved)`,
+          approvedAt: requiresApproval ? null : new Date().toISOString()
         },
         startDate: parsedStartDate,
         targetDispatchDate: parsedTargetDispatchDate,
         deliveryCommitmentDate: resolvedCommitmentDate,
+        status: initialStatus,
         plantLocation: plantLocation || 'Main Works - Unit 1',
         projectManagerId: req.user?.id || null,
         projectManagerName: actorName,
@@ -331,20 +620,32 @@ export const createProject = async (req, res, next) => {
       await prisma.customerPo.update({
         where: { id: customerPoUuid },
         data: {
-          status: 'PROJECT_CONVERTED',
-          convertedProjectId: project.projectId,
+          status: 'WORK_ORDER_CREATED',
+          convertedProjectId: project.workOrderNumber,
           convertedAt: new Date(),
           updatedById: req.user?.id || null,
           updatedByName: actorName
         }
       });
 
-      if (linkedLeadId && UUID_REGEX.test(String(linkedLeadId))) {
+      let targetLeadId = linkedLeadId && UUID_REGEX.test(String(linkedLeadId)) ? String(linkedLeadId) : null;
+      if (!targetLeadId && resolvedCustomerName) {
+        const matchedLead = await prisma.lead.findFirst({
+          where: {
+            companyName: { equals: resolvedCustomerName, mode: 'insensitive' },
+            stage: { in: ['WON', 'NEGOTIATION', 'QUOTE_PREPARED', 'QUOTATION_PREPARED'] }
+          },
+          orderBy: { updatedAt: 'desc' }
+        }).catch(() => null);
+        if (matchedLead) targetLeadId = matchedLead.id;
+      }
+
+      if (targetLeadId) {
         await prisma.lead.update({
-          where: { id: String(linkedLeadId) },
+          where: { id: targetLeadId },
           data: {
             stage: 'IN_PRODUCTION',
-            convertedProjectId: project.projectId,
+            convertedProjectId: project.workOrderNumber,
             updatedById: req.user?.id || null,
             updatedByName: actorName,
             stageHistory: {
@@ -352,7 +653,7 @@ export const createProject = async (req, res, next) => {
                 {
                   fromStage: 'WON',
                   toStage: 'IN_PRODUCTION',
-                  note: `Master Project ${project.projectId} (${project.workOrderNumber}) kicked off in Project Setup.`,
+                  note: `Work Order ${project.workOrderNumber} kicked off in Project Setup.`,
                   createdById: req.user?.id || null,
                   createdByName: actorName,
                   updatedById: req.user?.id || null,
@@ -366,7 +667,6 @@ export const createProject = async (req, res, next) => {
     }
 
     // Create ONLY the stages provided by the user (strictly zero default fallback or auto-seeding)
-    const stageTemplates = Array.isArray(stages) ? stages : [];
     let createdMilestonesCount = 0;
 
     for (let idx = 0; idx < stageTemplates.length; idx++) {
@@ -396,7 +696,7 @@ export const createProject = async (req, res, next) => {
           completionPercent: 0,
           baselineDate: targetDate,
           projectedDate: targetDate,
-          status: idx === 0 ? 'IN_PROGRESS' : 'NOT_STARTED',
+          status: 'NOT_STARTED',
           notes: s.notes || '',
           remarks: [
             {
@@ -422,7 +722,7 @@ export const createProject = async (req, res, next) => {
       module: 'project-setup',
       entityId: project.id,
       entityType: 'Project',
-      notes: `Master Project ${project.projectId} (${project.workOrderNumber}) created for ${project.customerName}`
+      notes: `Work Order ${project.workOrderNumber} created for ${project.customerName}`
     });
 
     const fullProject = await prisma.project.findUnique({
@@ -435,11 +735,105 @@ export const createProject = async (req, res, next) => {
       }
     });
 
+    const statusLabel =
+      initialStatus === 'CREATED'
+        ? 'awaiting approval'
+        : initialStatus === 'ASSIGNED_TO_DEPARTMENT'
+        ? 'auto-approved & assigned to departments'
+        : 'auto-approved';
+
     res.status(201).json({
       success: true,
-      message: `All set! Master Project ${project.projectId} (${project.workOrderNumber}) created with ${createdMilestonesCount} department stages.`,
+      message: `All set! Work Order ${project.workOrderNumber} created (${statusLabel}) with ${createdMilestonesCount} department stage(s).`,
       project: formatProject(fullProject),
       milestonesCount: createdMilestonesCount
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const approveProject = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const isUuid = UUID_REGEX.test(id);
+    const upperId = String(id).trim().toUpperCase();
+
+    const existing = await prisma.project.findFirst({
+      where: isUuid ? { id } : { OR: [{ workOrderNumber: upperId }, { projectId: upperId }] },
+      include: { milestones: { orderBy: { order: 'asc' } } }
+    });
+    if (!existing) {
+      return res.status(404).json({ success: false, message: 'Work Order not found.' });
+    }
+
+    const config = await ensureProjectSetupConfig(req.user);
+    const policy = {
+      ...DEFAULT_PROJECT_SETUP_POLICY,
+      ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
+    };
+
+    const approverIds = Array.isArray(policy.approverUserIds)
+      ? policy.approverUserIds.filter(Boolean)
+      : [];
+
+    if (approverIds.length > 0 && !approverIds.includes(req.user?.id)) {
+      return res.status(403).json({
+        success: false,
+        message: 'Just a heads up: only users assigned in Project Setup > Masters > Approval are authorized to approve this Work Order.'
+      });
+    }
+
+    const actorName = getActorName(req.user);
+    const milestonesCount = existing.milestones?.length || 0;
+    const nextStatus = milestonesCount > 0 ? 'ASSIGNED_TO_DEPARTMENT' : 'APPROVED';
+    const approvedAtIso = new Date().toISOString();
+
+    const updated = await prisma.project.update({
+      where: { id: existing.id },
+      data: {
+        status: nextStatus,
+        contractValue: {
+          ...(typeof existing.contractValue === 'object' ? existing.contractValue : {}),
+          approvedById: req.user?.id || null,
+          approvedByName: actorName,
+          approvedAt: approvedAtIso
+        },
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      },
+      include: {
+        milestones: {
+          orderBy: { order: 'asc' },
+          include: { subStages: { orderBy: { order: 'asc' } } }
+        }
+      }
+    });
+
+    await logAuditEvent({
+      req,
+      action: 'PROJECT_APPROVED',
+      module: 'project-setup',
+      entityId: updated.id,
+      entityType: 'Project',
+      notes: `Work Order ${updated.workOrderNumber} approved by ${actorName}. Status: ${nextStatus}`
+    });
+
+    let poDoc = null;
+    if (updated.customerPoId && UUID_REGEX.test(String(updated.customerPoId))) {
+      poDoc = await prisma.customerPo.findUnique({
+        where: { id: String(updated.customerPoId) },
+        include: { items: { orderBy: { slNo: 'asc' } } }
+      }).catch(() => null);
+    }
+
+    res.status(200).json({
+      success: true,
+      message:
+        nextStatus === 'ASSIGNED_TO_DEPARTMENT'
+          ? `All set! Work Order ${updated.workOrderNumber} approved and assigned to ${milestonesCount} department stage(s).`
+          : `All set! Work Order ${updated.workOrderNumber} approved.`,
+      project: formatProject(updated, poDoc)
     });
   } catch (error) {
     next(error);
@@ -451,16 +845,16 @@ export const updateProjectStage = async (req, res, next) => {
     const { id } = req.params;
     const { currentStage, status, notes } = req.body;
     const isUuid = UUID_REGEX.test(id);
+    const upperId = String(id).trim().toUpperCase();
 
     const existing = await prisma.project.findFirst({
-      where: isUuid ? { id } : { projectId: id.toUpperCase() }
+      where: isUuid ? { id } : { OR: [{ workOrderNumber: upperId }, { projectId: upperId }] }
     });
     if (!existing) {
-      return res.status(404).json({ success: false, message: 'Project not found.' });
+      return res.status(404).json({ success: false, message: 'Work Order not found.' });
     }
 
     const actorName = getActorName(req.user);
-    const actorRole = req.user?.role?.name || 'Project Manager';
 
     const updated = await prisma.project.update({
       where: { id: existing.id },
@@ -475,7 +869,7 @@ export const updateProjectStage = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: 'Great! Project stage updated.',
+      message: 'Great! Work Order stage updated.',
       project: formatProject(updated)
     });
   } catch (error) {
@@ -487,16 +881,31 @@ export const updateProject = async (req, res, next) => {
   try {
     const { id } = req.params;
     const isUuid = UUID_REGEX.test(id);
+    const upperId = String(id).trim().toUpperCase();
     const existing = await prisma.project.findFirst({
-      where: isUuid ? { id } : { projectId: id.toUpperCase() }
+      where: isUuid ? { id } : { OR: [{ workOrderNumber: upperId }, { projectId: upperId }] }
     });
     if (!existing) {
-      return res.status(404).json({ success: false, message: 'Project not found.' });
+      return res.status(404).json({ success: false, message: 'Work Order not found.' });
+    }
+
+    const config = await ensureProjectSetupConfig(req.user);
+    const policy = {
+      ...DEFAULT_PROJECT_SETUP_POLICY,
+      ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
+    };
+    const editTimeCheck = checkTimeWindowAllowed(existing, policy, 'EDIT');
+    if (!editTimeCheck.allowed) {
+      return res.status(403).json({
+        success: false,
+        message: editTimeCheck.message
+      });
     }
 
     const actorName = getActorName(req.user);
     const actorRole = req.user?.role?.name || 'Project Manager';
     const {
+      workOrderNumber: rawNewWo,
       projectName,
       customerName,
       machineModel,
@@ -504,25 +913,61 @@ export const updateProject = async (req, res, next) => {
       deliveryCommitmentDate,
       targetDispatchDate,
       plantLocation,
+      costCenter,
+      techSpec,
       contractValue,
       status,
       notes,
       stages
     } = req.body;
 
-    let resolvedContractValue = existing.contractValue;
+    const nextWorkOrderNumber =
+      rawNewWo !== undefined && String(rawNewWo).trim()
+        ? String(rawNewWo).trim().toUpperCase()
+        : existing.workOrderNumber;
+
+    if (nextWorkOrderNumber !== existing.workOrderNumber || nextWorkOrderNumber !== existing.projectId) {
+      const dup = await prisma.project.findFirst({
+        where: {
+          id: { not: existing.id },
+          OR: [{ workOrderNumber: nextWorkOrderNumber }, { projectId: nextWorkOrderNumber }]
+        }
+      });
+      if (dup) {
+        return res.status(400).json({
+          success: false,
+          message: `Just a heads up: Work Order Number "${nextWorkOrderNumber}" is already used by another project.`
+        });
+      }
+    }
+
+    let resolvedContractValue = {
+      ...(typeof existing.contractValue === 'object' ? existing.contractValue : {})
+    };
     if (contractValue && typeof contractValue === 'object') {
       resolvedContractValue = {
+        ...resolvedContractValue,
         currency: contractValue.currency || existing.contractValue?.currency || 'INR',
         amount: Number(contractValue.amount ?? existing.contractValue?.amount ?? 0),
         exchangeRate: Number(contractValue.exchangeRate ?? existing.contractValue?.exchangeRate ?? 1),
         baseAmountINR: Math.round(Number(contractValue.amount || 0) * Number(contractValue.exchangeRate || 1) * 100) / 100
       };
     }
+    if (costCenter !== undefined) {
+      resolvedContractValue.costCenter = String(costCenter).trim() || 'Modification';
+    }
+    if (techSpec !== undefined) {
+      resolvedContractValue.techSpec = String(techSpec).trim() || 'NA';
+    }
+
+    const oldProjectId = existing.projectId;
+    const oldWoNumber = existing.workOrderNumber;
 
     const updated = await prisma.project.update({
       where: { id: existing.id },
       data: {
+        workOrderNumber: nextWorkOrderNumber,
+        projectId: nextWorkOrderNumber,
         projectName: projectName !== undefined ? String(projectName).trim() : existing.projectName,
         customerName: customerName !== undefined ? String(customerName).trim() : existing.customerName,
         machineModel: machineModel !== undefined ? String(machineModel).trim() : existing.machineModel,
@@ -538,9 +983,35 @@ export const updateProject = async (req, res, next) => {
       }
     });
 
+    // Propagate Work Order Number change to child records if edited
+    if (nextWorkOrderNumber !== oldProjectId || nextWorkOrderNumber !== oldWoNumber) {
+      const oldRefs = Array.from(new Set([oldProjectId, oldWoNumber].filter(Boolean)));
+      await prisma.milestone.updateMany({
+        where: { OR: [{ projectRefId: existing.id }, { projectId: { in: oldRefs } }] },
+        data: { projectId: nextWorkOrderNumber }
+      }).catch(() => {});
+      await prisma.departmentSubStage.updateMany({
+        where: { projectId: { in: oldRefs } },
+        data: { projectId: nextWorkOrderNumber }
+      }).catch(() => {});
+      await prisma.customerPo.updateMany({
+        where: {
+          OR: [
+            ...(existing.customerPoId ? [{ id: existing.customerPoId }] : []),
+            { convertedProjectId: { in: oldRefs } }
+          ]
+        },
+        data: { convertedProjectId: nextWorkOrderNumber }
+      }).catch(() => {});
+      await prisma.lead.updateMany({
+        where: { convertedProjectId: { in: oldRefs } },
+        data: { convertedProjectId: nextWorkOrderNumber }
+      }).catch(() => {});
+    }
+
     if (Array.isArray(stages)) {
       const currentMilestones = await prisma.milestone.findMany({
-        where: { projectId: existing.projectId }
+        where: { projectRefId: existing.id }
       });
       const incomingCodes = new Set(
         stages.map((s) => (s.stageCode || s.stage || '').toUpperCase()).filter(Boolean)
@@ -586,7 +1057,7 @@ export const updateProject = async (req, res, next) => {
           await prisma.milestone.create({
             data: {
               projectRefId: existing.id,
-              projectId: existing.projectId,
+              projectId: updated.workOrderNumber,
               title: s.title || s.stageName || stageMaster?.title || stageCode,
               stage: stageCode,
               stageCode,
@@ -618,13 +1089,42 @@ export const updateProject = async (req, res, next) => {
       }
     }
 
+    // If project is already approved (not in CREATED pending-approval state), sync status with stages
+    if (status === undefined && existing.status !== 'CREATED') {
+      const latestMilestones = await prisma.milestone.findMany({
+        where: { projectRefId: existing.id }
+      });
+      let syncedStatus = existing.status;
+      if (latestMilestones.length === 0) {
+        syncedStatus = 'APPROVED';
+      } else {
+        const doneCount = latestMilestones.filter((m) => m.status === 'COMPLETED').length;
+        const activeCount = latestMilestones.filter(
+          (m) => m.status === 'IN_PROGRESS' || m.status === 'COMPLETED' || (m.completionPercent || 0) > 0
+        ).length;
+        if (doneCount === latestMilestones.length) {
+          syncedStatus = 'COMPLETED';
+        } else if (activeCount > 0) {
+          syncedStatus = 'IN_PROGRESS';
+        } else {
+          syncedStatus = 'ASSIGNED_TO_DEPARTMENT';
+        }
+      }
+      if (syncedStatus !== updated.status) {
+        await prisma.project.update({
+          where: { id: existing.id },
+          data: { status: syncedStatus }
+        });
+      }
+    }
+
     await logAuditEvent({
       req,
       action: 'PROJECT_UPDATED',
       module: 'project-setup',
       entityId: updated.id,
       entityType: 'Project',
-      notes: `Project ${updated.projectId} (${updated.workOrderNumber}) updated.`
+      notes: `Work Order ${updated.workOrderNumber} updated.`
     });
 
     const fullProject = await prisma.project.findUnique({
@@ -639,7 +1139,7 @@ export const updateProject = async (req, res, next) => {
 
     res.status(200).json({
       success: true,
-      message: `All set! Project ${updated.workOrderNumber} updated successfully.`,
+      message: `All set! Work Order ${updated.workOrderNumber} updated successfully.`,
       project: formatProject(fullProject)
     });
   } catch (error) {
@@ -651,25 +1151,96 @@ export const deleteProject = async (req, res, next) => {
   try {
     const { id } = req.params;
     const isUuid = UUID_REGEX.test(id);
+    const upperId = String(id).trim().toUpperCase();
     const existing = await prisma.project.findFirst({
-      where: isUuid ? { id } : { projectId: id.toUpperCase() }
+      where: isUuid ? { id } : { OR: [{ workOrderNumber: upperId }, { projectId: upperId }] }
     });
     if (!existing) {
-      return res.status(404).json({ success: false, message: 'Project not found.' });
+      return res.status(404).json({ success: false, message: 'Work Order not found.' });
+    }
+
+    const config = await ensureProjectSetupConfig(req.user);
+    const policy = {
+      ...DEFAULT_PROJECT_SETUP_POLICY,
+      ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
+    };
+    const deleteTimeCheck = checkTimeWindowAllowed(existing, policy, 'DELETE');
+    if (!deleteTimeCheck.allowed) {
+      return res.status(403).json({
+        success: false,
+        message: deleteTimeCheck.message
+      });
     }
 
     const actorName = getActorName(req.user);
-    const actorRole = req.user?.role?.name || 'Project Manager';
 
-    if (existing.customerPoId) {
-      await prisma.customerPo.update({
-        where: { id: existing.customerPoId },
+    const poOrConditions = [
+      ...(existing.customerPoId && UUID_REGEX.test(String(existing.customerPoId)) ? [{ id: existing.customerPoId }] : []),
+      ...(existing.projectId ? [{ convertedProjectId: existing.projectId }] : []),
+      ...(existing.workOrderNumber ? [{ convertedProjectId: existing.workOrderNumber }] : []),
+      ...(existing.customerPoNumber ? [{ poNumber: existing.customerPoNumber }] : [])
+    ];
+
+    const linkedLeadIds = new Set();
+
+    if (poOrConditions.length > 0) {
+      const linkedPos = await prisma.customerPo.findMany({
+        where: { OR: poOrConditions }
+      }).catch(() => []);
+
+      for (const po of linkedPos) {
+        const revertStatus =
+          po.orderAcceptanceNumber && String(po.orderAcceptanceNumber).trim()
+            ? 'OA_ISSUED'
+            : 'RECEIVED';
+
+        await prisma.customerPo.update({
+          where: { id: po.id },
+          data: {
+            status: revertStatus,
+            convertedProjectId: null,
+            convertedAt: null,
+            updatedById: req.user?.id || null,
+            updatedByName: actorName
+          }
+        }).catch(() => {});
+
+        if (po.leadId && UUID_REGEX.test(String(po.leadId))) {
+          linkedLeadIds.add(String(po.leadId));
+        }
+      }
+    }
+
+    const leadsByProject = await prisma.lead.findMany({
+      where: {
+        convertedProjectId: {
+          in: Array.from(new Set([existing.projectId, existing.workOrderNumber].filter(Boolean)))
+        }
+      }
+    }).catch(() => []);
+    leadsByProject.forEach((ld) => linkedLeadIds.add(ld.id));
+
+    for (const ldId of linkedLeadIds) {
+      await prisma.lead.update({
+        where: { id: ldId },
         data: {
-          status: 'RECEIVED',
+          stage: 'WON',
           convertedProjectId: null,
-          convertedAt: null,
           updatedById: req.user?.id || null,
-          updatedByName: actorName
+          updatedByName: actorName,
+          stageHistory: {
+            create: [
+              {
+                fromStage: 'IN_PRODUCTION',
+                toStage: 'WON',
+                note: `Work Order ${existing.workOrderNumber} was deleted; reverted to OA / Won stage.`,
+                createdById: req.user?.id || null,
+                createdByName: actorName,
+                updatedById: req.user?.id || null,
+                updatedByName: actorName
+              }
+            ]
+          }
         }
       }).catch(() => {});
     }
@@ -684,12 +1255,12 @@ export const deleteProject = async (req, res, next) => {
       module: 'project-setup',
       entityId: existing.id,
       entityType: 'Project',
-      notes: `Project ${existing.projectId} (${existing.workOrderNumber}) deleted.`
+      notes: `Work Order ${existing.workOrderNumber} deleted.`
     });
 
     res.status(200).json({
       success: true,
-      message: `All set! Project ${existing.workOrderNumber} deleted successfully.`
+      message: `All set! Work Order ${existing.workOrderNumber} deleted successfully.`
     });
   } catch (error) {
     next(error);

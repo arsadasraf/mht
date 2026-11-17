@@ -19,8 +19,8 @@ export interface DistinctValueItem {
 export interface ExcelColumnFilterProps {
   title: string;
   columnKey: string;
-  distinctValues: DistinctValueItem[];
-  selectedValues: string[] | null; // null means no filter is applied (all values allowed)
+  distinctValues?: DistinctValueItem[];
+  selectedValues?: string[] | null; // null or undefined means no filter is applied (all values allowed)
   onFilterChange: (selected: string[] | null) => void;
   currentSortField?: string;
   currentSortDirection?: 'asc' | 'desc';
@@ -32,8 +32,8 @@ export interface ExcelColumnFilterProps {
 export default function ExcelColumnFilter({
   title,
   columnKey,
-  distinctValues,
-  selectedValues,
+  distinctValues = [],
+  selectedValues = null,
   onFilterChange,
   currentSortField,
   currentSortDirection,
@@ -43,27 +43,86 @@ export default function ExcelColumnFilter({
 }: ExcelColumnFilterProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [searchValue, setSearchValue] = useState('');
+  const [computedAlign, setComputedAlign] = useState<'left' | 'right'>(align);
   const popoverRef = useRef<HTMLDivElement>(null);
+
+  // Safe array references to prevent runtime undefined crashes
+  const safeDistinctValues = useMemo(() => Array.isArray(distinctValues) ? distinctValues : [], [distinctValues]);
+  const safeSelectedValues = useMemo(() => Array.isArray(selectedValues) ? selectedValues : null, [selectedValues]);
 
   // Draft selection while the popover is open
   const [draftSelected, setDraftSelected] = useState<Set<string>>(() => {
-    if (selectedValues === null) {
-      return new Set(distinctValues.map((d) => d.value));
+    if (!safeSelectedValues) {
+      return new Set(safeDistinctValues.map((d) => d.value));
     }
-    return new Set(selectedValues);
+    return new Set(safeSelectedValues);
   });
 
-  // When popover opens or selectedValues changes from outside, reset draft
+  // When popover opens, initialize draft selection and auto-detect right-edge alignment
   useEffect(() => {
     if (isOpen) {
-      if (selectedValues === null) {
-        setDraftSelected(new Set(distinctValues.map((d) => d.value)));
+      if (!safeSelectedValues) {
+        setDraftSelected(new Set(safeDistinctValues.map((d) => d.value)));
       } else {
-        setDraftSelected(new Set(selectedValues));
+        setDraftSelected(new Set(safeSelectedValues));
       }
       setSearchValue('');
+
+      if (popoverRef.current && typeof window !== 'undefined') {
+        const rect = popoverRef.current.getBoundingClientRect();
+        if (align === 'right' || rect.left + 270 > window.innerWidth) {
+          setComputedAlign('right');
+        } else {
+          setComputedAlign('left');
+        }
+      }
     }
-  }, [isOpen, selectedValues, distinctValues]);
+    // Only run when isOpen transitions to true so live parent re-renders don't reset user's open popover
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOpen]);
+
+  // Prevent parent table containers (.overflow-hidden / .overflow-x-auto) from clipping the open popover
+  useEffect(() => {
+    if (!isOpen || !popoverRef.current) return;
+
+    const modifiedOverflowHidden: HTMLElement[] = [];
+    const modifiedOverflowXAuto: Array<{ el: HTMLElement; mode: 'visible' | 'pad' }> = [];
+
+    let el: HTMLElement | null = popoverRef.current.parentElement;
+    while (el && el !== document.body) {
+      if (el.classList.contains('overflow-hidden')) {
+        el.classList.remove('overflow-hidden');
+        el.classList.add('overflow-visible');
+        modifiedOverflowHidden.push(el);
+      }
+      if (el.classList.contains('overflow-x-auto')) {
+        if (el.scrollWidth <= el.clientWidth + 2) {
+          el.classList.remove('overflow-x-auto');
+          el.classList.add('overflow-visible');
+          modifiedOverflowXAuto.push({ el, mode: 'visible' });
+        } else {
+          el.classList.add('pb-80');
+          modifiedOverflowXAuto.push({ el, mode: 'pad' });
+        }
+      }
+      el = el.parentElement;
+    }
+
+    return () => {
+      modifiedOverflowHidden.forEach((node) => {
+        node.classList.remove('overflow-visible');
+        node.classList.add('overflow-hidden');
+      });
+      modifiedOverflowXAuto.forEach(({ el: node, mode }) => {
+        if (mode === 'visible') {
+          node.classList.remove('overflow-visible');
+          node.classList.add('overflow-x-auto');
+        } else {
+          node.classList.remove('pb-80');
+        }
+      });
+    };
+  }, [isOpen]);
 
   // Handle clicking outside to close
   useEffect(() => {
@@ -82,19 +141,19 @@ export default function ExcelColumnFilter({
 
   // Is this column currently filtered?
   const isFiltered = useMemo(() => {
-    if (selectedValues === null) return false;
-    // If selectedValues has fewer items than distinctValues, a filter is active
-    return selectedValues.length < distinctValues.length;
-  }, [selectedValues, distinctValues]);
+    if (!safeSelectedValues) return false;
+    // If safeSelectedValues has fewer items than safeDistinctValues, a filter is active
+    return safeSelectedValues.length < safeDistinctValues.length;
+  }, [safeSelectedValues, safeDistinctValues]);
 
   // Filtered distinct values based on popover search
   const visibleValues = useMemo(() => {
-    if (!searchValue.trim()) return distinctValues;
+    if (!searchValue.trim()) return safeDistinctValues;
     const q = searchValue.toLowerCase().trim();
-    return distinctValues.filter((item) =>
+    return safeDistinctValues.filter((item) =>
       item.value.toLowerCase().includes(q)
     );
-  }, [distinctValues, searchValue]);
+  }, [safeDistinctValues, searchValue]);
 
   // Are all visible values checked?
   const isAllVisibleSelected = useMemo(() => {
@@ -132,7 +191,7 @@ export default function ExcelColumnFilter({
 
   // Apply Filter
   const handleApply = () => {
-    if (draftSelected.size === distinctValues.length) {
+    if (draftSelected.size === safeDistinctValues.length) {
       // All selected = no filter
       onFilterChange(null);
     } else {
@@ -144,7 +203,7 @@ export default function ExcelColumnFilter({
   // Clear Filter for this column
   const handleClear = () => {
     onFilterChange(null);
-    setDraftSelected(new Set(distinctValues.map((d) => d.value)));
+    setDraftSelected(new Set(safeDistinctValues.map((d) => d.value)));
     setIsOpen(false);
   };
 
@@ -196,8 +255,8 @@ export default function ExcelColumnFilter({
       {isOpen && (
         <div
           onClick={(e) => e.stopPropagation()}
-          className={`absolute top-full mt-2 z-[100] w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 text-xs text-slate-800 ${
-            align === 'right' ? 'right-0' : 'left-0'
+          className={`absolute top-full mt-2 z-[100] w-64 bg-white rounded-2xl shadow-2xl border border-slate-200 overflow-hidden animate-in fade-in zoom-in-95 text-xs text-slate-800 normal-case tracking-normal font-normal ${
+            computedAlign === 'right' ? 'right-0' : 'left-0'
           }`}
         >
           {/* Popover Header: Column Name */}
@@ -345,3 +404,5 @@ export default function ExcelColumnFilter({
     </div>
   );
 }
+
+export { ExcelColumnFilter };

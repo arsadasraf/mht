@@ -18,9 +18,13 @@ model Project {
   actualDispatchDate         DateTime?
 
   currentStage               String      @default("PROJECT_SETUP")
-  status                     String      @default("ACTIVE")
+  status                     String      @default("CREATED")
   progressPercent            Float       @default(0)
   plantLocation              String      @default("Main Works - Unit 1")
+
+  approvedById               String?     @db.Uuid
+  approvedByName             String      @default("")
+  approvedAt                 DateTime?
 
   projectManagerId           String?     @db.Uuid
   projectManagerName         String      @default("")

@@ -1,32 +1,25 @@
-model DispatchOrder {
-  id                       String   @id @default(uuid()) @db.Uuid
-  dispatchNumber           String   @unique
-  projectId                String   @unique
-  gatePassNumber           String?
-  status                   String   @default("PRE_DISPATCH_HOLD") // SNAG_BLOCKED, PRE_DISPATCH_HOLD, GATE_PASS_UNLOCKED, DISPATCHED
-  zeroSnagVerified         Boolean  @default(false)
-  zeroSnagVerifiedAt       DateTime?
-  zeroSnagVerifiedById     String?  @db.Uuid
-  zeroSnagVerifiedByName   String   @default("")
-  commercialClearanceGiven Boolean  @default(false)
-  shippingAddress          String   @default("")
-  transporterName          String   @default("")
-  vehicleNumber            String   @default("")
-  lrNumber                 String   @default("")
-  packingList              Json     @default("[]")
-  dispatchedAt             DateTime?
-  dispatchedById           String?  @db.Uuid
-  dispatchedByName         String   @default("")
+model DispatchTeamMember {
+  id             String   @id @default(uuid()) @db.Uuid
+  memberCode     String   @unique
+  fullName       String
+  designation    String
+  email          String   @default("")
+  phone          String   @default("")
+  department     String   @default("TRIAL_AND_DISPATCH")
+  skillSpecialty String   @default("Trial & Final QC Inspection")
+  isActive       Boolean  @default(true)
+  notes          String   @default("")
 
   // Universal Action Tracking
-  createdById              String?  @db.Uuid
-  createdByName            String   @default("")
-  updatedById              String?  @db.Uuid
-  updatedByName            String   @default("")
-  createdAt                DateTime @default(now())
-  updatedAt                DateTime @updatedAt
+  createdById    String?  @db.Uuid
+  createdByName  String   @default("")
+  updatedById    String?  @db.Uuid
+  updatedByName  String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
 
-  @@index([projectId])
-  @@map("dispatch_orders")
+  @@index([memberCode])
+  @@index([designation])
+  @@index([isActive])
+  @@map("dispatch_team_members")
 }
-

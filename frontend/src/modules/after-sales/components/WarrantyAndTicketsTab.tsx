@@ -34,7 +34,7 @@ export default function WarrantyAndTicketsTab() {
 
     try {
       await createServiceTicket({
-        projectId: activeProjectId || 'PRJ-2026-001',
+        projectId: activeProjectId || 'WO-2026-1001',
         customerName,
         serviceType,
         title,

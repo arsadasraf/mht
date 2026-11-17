@@ -205,11 +205,11 @@ export default function DeliveryChallanModal({
 
             <div>
               <label className="block text-xs font-bold text-slate-700 mb-1">
-                Project Reference (Optional)
+                Work Order Reference (Optional)
               </label>
               <input
                 type="text"
-                placeholder="PRJ-2026-XXXX"
+                placeholder="WO-2026-1001"
                 value={projectId}
                 onChange={(e) => setProjectId(e.target.value)}
                 className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-mono focus:outline-none focus:border-orange-500"

@@ -7,6 +7,7 @@ import {
   ensureProjectSetupConfig,
   DEFAULT_PROJECT_SETUP_POLICY
 } from '../../project-setup/controllers/stageMaster.controller.js';
+import { generateNextWorkOrderNumber } from '../../project-setup/controllers/project.controller.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -574,7 +575,17 @@ export const updateCustomerPo = async (req, res, next) => {
       });
     }
 
-    if (existingPo.status === 'PROJECT_CONVERTED' || existingPo.status === 'WORK_ORDER_CREATED') {
+    const isOnlyStatusUpdate = Object.keys(req.body).every((k) => k === 'status' || k === 'id');
+
+    if (
+      !isOnlyStatusUpdate &&
+      (existingPo.status === 'PROJECT_CONVERTED' ||
+        existingPo.status === 'WORK_ORDER_CREATED' ||
+        existingPo.status === 'IN_PROGRESS' ||
+        existingPo.status === 'DISPATCHED' ||
+        existingPo.status === 'COMMISSIONED' ||
+        Boolean(existingPo.convertedProjectId))
+    ) {
       return res.status(400).json({
         success: false,
         message: 'Just a heads up: this Customer PO has already been converted into a live Project and cannot be modified.'
@@ -589,7 +600,6 @@ export const updateCustomerPo = async (req, res, next) => {
     const limitMinutes = Number(prefixPolicy.poEditDeleteTimeLimitMinutes) || 120;
     const createdAtTime = new Date(existingPo.createdAt).getTime();
     const isTimeExpired = Date.now() - createdAtTime > limitMinutes * 60 * 1000;
-    const isOnlyStatusUpdate = Object.keys(req.body).every((k) => k === 'status' || k === 'id');
 
     if (isTimeExpired && !isOnlyStatusUpdate) {
       return res.status(403).json({
@@ -875,7 +885,7 @@ export const generateOrderAcceptance = async (req, res, next) => {
           ? new Date(deliveryCommitmentDate)
           : existingPo.deliveryCommitmentDate,
         notes: typeof notes === 'string' ? notes : existingPo.notes,
-        status: 'OA_ISSUED',
+        status: existingPo.convertedProjectId ? existingPo.status : 'OA_ISSUED',
         updatedById: req.user?.id || null,
         updatedByName: getActorName(req.user)
       },
@@ -988,10 +998,17 @@ export const convertCustomerPoToProject = async (req, res, next) => {
       });
     }
 
+    if (!customerPo.orderAcceptanceNumber || !String(customerPo.orderAcceptanceNumber).trim() || customerPo.status === 'RECEIVED') {
+      return res.status(400).json({
+        success: false,
+        message: `Just a heads up: please generate the Order Acceptance (OA) for Customer PO "${customerPo.poNumber}" before creating a Project.`
+      });
+    }
+
     if ((customerPo.status === 'PROJECT_CONVERTED' || customerPo.status === 'WORK_ORDER_CREATED') && customerPo.convertedProjectId) {
       return res.status(400).json({
         success: false,
-        message: `This PO is already assigned to Project ID "${customerPo.convertedProjectId}".`
+        message: `This PO is already assigned to Work Order "${customerPo.convertedProjectId}".`
       });
     }
 
@@ -1002,11 +1019,8 @@ export const convertCustomerPoToProject = async (req, res, next) => {
       ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
     };
 
-    const year = new Date().getFullYear();
-    const projectCount = await prisma.project.count();
-    const seq = (Number(policy.projectStartSeq) || 1001) + projectCount;
-    const projectId = `${(policy.projectPrefix || 'PRJ').toUpperCase()}-${year}-${seq}`;
-    const workOrderNumber = `${(policy.workOrderPrefix || 'WO').toUpperCase()}-${year}-${seq}`;
+    const workOrderNumber = await generateNextWorkOrderNumber(policy);
+    const projectId = workOrderNumber;
 
     const actorName = getActorName(req.user);
     const actorRole = req.user?.role?.name || 'Project Manager';
@@ -1131,14 +1145,14 @@ export const convertCustomerPoToProject = async (req, res, next) => {
       module: 'crm',
       entityId: updatedPo.id,
       entityType: 'CustomerPo',
-      afterData: { projectId, workOrderNumber },
-      notes: `Customer PO ${updatedPo.poNumber} converted to Master Project ${projectId} (${workOrderNumber}) for ${updatedPo.companyName}.`
+      afterData: { projectId: workOrderNumber, workOrderNumber },
+      notes: `Customer PO ${updatedPo.poNumber} converted to Work Order ${workOrderNumber} for ${updatedPo.companyName}.`
     });
 
     res.status(200).json({
       success: true,
-      message: `All set! Customer PO converted to Project Setup: ${projectId} (${workOrderNumber}).`,
-      projectId,
+      message: `All set! Customer PO converted to Work Order: ${workOrderNumber}.`,
+      projectId: workOrderNumber,
       workOrderNumber,
       project: createdProject,
       customerPo: await formatCustomerPo(updatedPo)

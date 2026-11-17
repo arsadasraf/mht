@@ -9,29 +9,6 @@ export const storeApi = apiSlice.injectEndpoints({
       }),
       providesTags: ['Inventory']
     }),
-    getAllocations: builder.query({
-      query: (params) => ({
-        url: '/store/allocations',
-        params
-      }),
-      providesTags: ['Allocation']
-    }),
-    requestTransfer: builder.mutation({
-      query: ({ id, targetProjectId, justification }) => ({
-        url: `/store/allocations/${id}/request-transfer`,
-        method: 'POST',
-        body: { targetProjectId, justification }
-      }),
-      invalidatesTags: ['Allocation', 'Inventory']
-    }),
-    approveTransfer: builder.mutation({
-      query: ({ id, approved, notes }) => ({
-        url: `/store/allocations/${id}/approve-transfer`,
-        method: 'POST',
-        body: { approved, notes }
-      }),
-      invalidatesTags: ['Allocation', 'Inventory']
-    }),
     createGrn: builder.mutation({
       query: (data) => ({
         url: '/store/grn',
@@ -60,6 +37,48 @@ export const storeApi = apiSlice.injectEndpoints({
         url: `/store/wip/material-requests/${id}/issue`,
         method: 'POST',
         body: { items, notes }
+      }),
+      invalidatesTags: ['MaterialRequest', 'Inventory']
+    }),
+    getWorkOrderBomItems: builder.query<any, string>({
+      query: (projectId) => `/store/wip/work-orders/${projectId}/items`,
+      providesTags: ['Inventory', 'Project']
+    }),
+    getWorkOrderWipSummary: builder.query<any, { status?: string; search?: string } | void>({
+      query: (params) => ({
+        url: '/store/wip/work-orders',
+        params: params || {}
+      }),
+      providesTags: ['MaterialRequest', 'Inventory']
+    }),
+    completeWorkOrderWip: builder.mutation<any, { projectId: string; mrIds?: string[]; notes?: string }>({
+      query: ({ projectId, ...body }) => ({
+        url: `/store/wip/work-orders/${projectId}/complete`,
+        method: 'POST',
+        body
+      }),
+      invalidatesTags: ['MaterialRequest', 'Inventory']
+    }),
+    consumeMaterialRequest: builder.mutation<any, { id: string; notes?: string }>({
+      query: ({ id, ...body }) => ({
+        url: `/store/wip/material-requests/${id}/consume`,
+        method: 'POST',
+        body
+      }),
+      invalidatesTags: ['MaterialRequest', 'Inventory']
+    }),
+    updateMaterialRequest: builder.mutation<any, { id: string; [key: string]: any }>({
+      query: ({ id, ...data }) => ({
+        url: `/store/wip/material-requests/${id}`,
+        method: 'PUT',
+        body: data
+      }),
+      invalidatesTags: ['MaterialRequest', 'Inventory']
+    }),
+    deleteMaterialRequest: builder.mutation<any, string>({
+      query: (id) => ({
+        url: `/store/wip/material-requests/${id}`,
+        method: 'DELETE'
       }),
       invalidatesTags: ['MaterialRequest', 'Inventory']
     }),
@@ -115,25 +134,128 @@ export const storeApi = apiSlice.injectEndpoints({
         body: data
       }),
       invalidatesTags: ['StoreMaster']
+    }),
+    getStoreConfig: builder.query({
+      query: () => '/store/config',
+      providesTags: ['StoreMaster']
+    }),
+    updateStoreConfig: builder.mutation({
+      query: (body) => ({
+        url: '/store/config',
+        method: 'PUT',
+        body
+      }),
+      invalidatesTags: ['StoreMaster']
+    }),
+    getStoreLocations: builder.query({
+      query: (params) => ({
+        url: '/store/locations',
+        params
+      }),
+      providesTags: ['StoreMaster']
+    }),
+    createStoreLocation: builder.mutation({
+      query: (body) => ({
+        url: '/store/locations',
+        method: 'POST',
+        body
+      }),
+      invalidatesTags: ['StoreMaster']
+    }),
+    updateStoreLocation: builder.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/store/locations/${id}`,
+        method: 'PUT',
+        body
+      }),
+      invalidatesTags: ['StoreMaster']
+    }),
+    deleteStoreLocation: builder.mutation({
+      query: (id) => ({
+        url: `/store/locations/${id}`,
+        method: 'DELETE'
+      }),
+      invalidatesTags: ['StoreMaster']
+    }),
+    assignItemLocation: builder.mutation({
+      query: (body) => ({
+        url: '/store/inventory/assign-location',
+        method: 'PATCH',
+        body
+      }),
+      invalidatesTags: ['Inventory']
+    }),
+    getNextGrnNumber: builder.query({
+      query: () => '/store/grn/next-number',
+      providesTags: ['StoreMaster']
+    }),
+    getOpenPurchaseOrders: builder.query({
+      query: (params) => ({
+        url: '/store/open-pos',
+        params
+      }),
+      providesTags: ['PurchaseOrder']
+    }),
+    getGrnRecords: builder.query({
+      query: (params) => ({
+        url: '/store/grn',
+        params
+      }),
+      providesTags: ['Inventory', 'StoreMaster']
+    }),
+    getGrnById: builder.query({
+      query: (id) => `/store/grn/${id}`,
+      providesTags: ['Inventory']
+    }),
+    updateGrn: builder.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/store/grn/${id}`,
+        method: 'PUT',
+        body
+      }),
+      invalidatesTags: ['Inventory', 'StoreMaster', 'PurchaseOrder']
+    }),
+    deleteGrn: builder.mutation({
+      query: (id) => ({
+        url: `/store/grn/${id}`,
+        method: 'DELETE'
+      }),
+      invalidatesTags: ['Inventory', 'StoreMaster', 'PurchaseOrder']
     })
   })
 });
 
 export const {
   useGetInventoryQuery,
-  useGetAllocationsQuery,
-  useRequestTransferMutation,
-  useApproveTransferMutation,
   useCreateGrnMutation,
+  useGetGrnRecordsQuery,
+  useGetGrnByIdQuery,
+  useUpdateGrnMutation,
+  useDeleteGrnMutation,
   useGetMaterialRequestsQuery,
   useCreateMaterialRequestMutation,
   useIssueMaterialRequestMutation,
+  useUpdateMaterialRequestMutation,
+  useDeleteMaterialRequestMutation,
+  useGetWorkOrderBomItemsQuery,
+  useGetWorkOrderWipSummaryQuery,
+  useCompleteWorkOrderWipMutation,
+  useConsumeMaterialRequestMutation,
   useGetWipInventoryQuery,
   useReturnWipMaterialMutation,
   useGetDeliveryChallansQuery,
   useCreateDeliveryChallanMutation,
   useMarkDcReturnedMutation,
   useGetStoreMastersQuery,
-  useCreateStoreMasterMutation
+  useCreateStoreMasterMutation,
+  useGetStoreConfigQuery,
+  useUpdateStoreConfigMutation,
+  useGetStoreLocationsQuery,
+  useCreateStoreLocationMutation,
+  useUpdateStoreLocationMutation,
+  useDeleteStoreLocationMutation,
+  useAssignItemLocationMutation,
+  useGetNextGrnNumberQuery,
+  useGetOpenPurchaseOrdersQuery
 } = storeApi;
 

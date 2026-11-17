@@ -43,13 +43,13 @@ import { addToast } from '../../../store/uiSlice';
 const DEPARTMENTS = [
   { id: 'ADMIN', label: 'Admin & Governance' },
   { id: 'MARKETING_SALES', label: 'Marketing & CRM' },
-  { id: 'PROJECT_SETUP', label: 'Project Setup Spine' },
+  { id: 'PROJECT_SETUP', label: 'Project Setup' },
   { id: 'DESIGN_ENGINEERING', label: 'Design & Engineering' },
   { id: 'PURCHASE_PROCUREMENT', label: 'Purchase & Sourcing' },
   { id: 'INCOMING_QUALITY', label: 'Incoming Quality (QC)' },
   { id: 'STORES_WAREHOUSE', label: 'Stores & Warehouse' },
-  { id: 'PRODUCTION_ASSEMBLY', label: 'Production & Trials' },
-  { id: 'DISPATCH_LOGISTICS', label: 'Dispatch & Logistics' },
+  { id: 'PRODUCTION_ASSEMBLY', label: 'Production & Testing' },
+  { id: 'DISPATCH_LOGISTICS', label: 'Trials/Inspection & Dispatch' },
   { id: 'AFTER_SALES', label: 'After Sales & Service' }
 ];
 

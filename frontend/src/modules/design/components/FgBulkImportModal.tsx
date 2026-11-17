@@ -69,6 +69,7 @@ export default function FgBulkImportModal({
       categoryCode: string;
       categoryName: string;
       description: string;
+      make: string;
       uom: string;
       hsnCode: string;
     }> = [];
@@ -135,7 +136,7 @@ export default function FgBulkImportModal({
           rowNumber,
           name: rawName,
           revision: rawRevision,
-          reason: `FG Item "${rawName}" with Revision "${rawRevision}" already exists in the system.`,
+          reason: `Design Drawing "${rawName}" with Revision "${rawRevision}" already exists in the system.`,
           isDbDuplicate: true,
           isFileDuplicate: false
         });
@@ -155,6 +156,7 @@ export default function FgBulkImportModal({
         categoryCode: String(row['Category'] || row['category'] || '').trim(),
         categoryName: String(row['Category'] || row['category'] || '').trim(),
         description: String(row['Description'] || row['description'] || '').trim(),
+        make: String(row['Make / Brand'] || row['Make'] || row['make'] || row['Brand'] || row['brand'] || '').trim(),
         uom: String(row['UOM'] || row['uom'] || 'Nos').trim(),
         hsnCode: String(row['HSN Code'] || row['hsnCode'] || '8479').trim()
       });
@@ -170,6 +172,7 @@ export default function FgBulkImportModal({
       'Revision',
       'Classification *',
       'Description',
+      'Make / Brand',
       'Category',
       'UOM',
       'HSN Code'
@@ -182,6 +185,7 @@ export default function FgBulkImportModal({
         'Rev 1.0',
         'COMPONENT',
         'Hardened precision flyer shaft for winding unit',
+        'In-House / Machine House',
         'Flyer Components',
         'Nos',
         '8479'
@@ -191,6 +195,7 @@ export default function FgBulkImportModal({
         'Rev 1.0',
         'SUB_ASSEMBLY',
         'Complete flyer spindle sub-assembly with bearings',
+        'In-House / Machine House',
         'Spindle Assemblies',
         'Nos',
         '8479'
@@ -200,6 +205,7 @@ export default function FgBulkImportModal({
         'Rev 1.0',
         'ASSEMBLY',
         'Main high-speed coil winding head complete assembly',
+        'Machine House',
         'Winding Heads',
         'Nos',
         '8479'
@@ -212,6 +218,7 @@ export default function FgBulkImportModal({
       { wch: 12 },
       { wch: 18 },
       { wch: 45 },
+      { wch: 25 },
       { wch: 24 },
       { wch: 10 },
       { wch: 12 }
@@ -324,7 +331,7 @@ export default function FgBulkImportModal({
             </div>
             <div>
               <h2 className="text-base font-extrabold text-slate-900 tracking-tight">
-                Bulk Import FG Items
+                Bulk Import Design Drawings
               </h2>
               <p className="text-[11px] text-slate-500 font-medium">
                 Upload Component, Sub-Assembly, or Assembly parts with duplicate detection
@@ -350,12 +357,12 @@ export default function FgBulkImportModal({
               </div>
               <div className="space-y-1 max-w-md">
                 <h3 className="text-base font-extrabold text-slate-900 tracking-tight">
-                  All set! {importSummary.importedCount} FG item{importSummary.importedCount === 1 ? '' : 's'} imported successfully
+                  All set! {importSummary.importedCount} Design Drawing{importSummary.importedCount === 1 ? '' : 's'} imported successfully
                 </h3>
                 <p className="text-xs text-slate-500 font-medium">
                   {importSummary.restoredCount
-                    ? `${importSummary.newCount || 0} new FG item(s) created and ${importSummary.restoredCount} previously deleted item(s) restored.`
-                    : 'Your master Finished Goods catalog has been updated with the new records.'}
+                    ? `${importSummary.newCount || 0} new Design Drawing(s) created and ${importSummary.restoredCount} previously deleted item(s) restored.`
+                    : 'Your master Design Drawings catalog has been updated with the new records.'}
                 </p>
               </div>
 
@@ -406,7 +413,7 @@ export default function FgBulkImportModal({
               {/* Step 1: Download Template Callout */}
               <div className="p-4 bg-slate-50 border border-slate-200 rounded-xl flex flex-col sm:flex-row sm:items-center justify-between gap-3">
                 <div className="space-y-0.5">
-                  <span className="text-xs font-bold text-slate-800">Need the official FG template?</span>
+                  <span className="text-xs font-bold text-slate-800">Need the official Design Drawing template?</span>
                   <p className="text-[11px] text-slate-500">
                     Download the pre-formatted Excel template with classification options and sample rows.
                   </p>
@@ -512,7 +519,7 @@ export default function FgBulkImportModal({
                             Duplicate Alert: Same Part Number with Same Revision cannot be imported
                           </h4>
                           <p className="text-[11px] text-amber-700 mt-0.5">
-                            {analysis.duplicateRows.length} row(s) below will be strictly skipped to preserve FG item revision integrity. The remaining {analysis.validRows.length} unique row(s) are ready to import.
+                            {analysis.duplicateRows.length} row(s) below will be strictly skipped to preserve Design Drawing revision integrity. The remaining {analysis.validRows.length} unique row(s) are ready to import.
                           </p>
                         </div>
                       </div>
@@ -587,7 +594,7 @@ export default function FgBulkImportModal({
                     <>
                       <Upload className="w-3.5 h-3.5" />
                       <span>
-                        Import {analysis.validRows.length} Unique FG Item{analysis.validRows.length === 1 ? '' : 's'}
+                        Import {analysis.validRows.length} Unique Design Drawing{analysis.validRows.length === 1 ? '' : 's'}
                       </span>
                     </>
                   )}

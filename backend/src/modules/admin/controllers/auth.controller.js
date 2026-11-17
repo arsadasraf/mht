@@ -56,6 +56,7 @@ const setTokenCookies = (res, accessToken, refreshToken) => {
     httpOnly: true,
     secure: isProduction,
     sameSite: 'lax',
+    path: '/',
     maxAge: 15 * 60 * 1000 // 15 mins
   });
 
@@ -63,8 +64,15 @@ const setTokenCookies = (res, accessToken, refreshToken) => {
     httpOnly: true,
     secure: isProduction,
     sameSite: 'lax',
+    path: '/',
     maxAge: 30 * 24 * 60 * 60 * 1000 // up to 30 days
   });
+};
+
+const clearTokenCookies = (res) => {
+  const isProduction = process.env.NODE_ENV === 'production';
+  res.clearCookie('accessToken', { httpOnly: true, secure: isProduction, sameSite: 'lax', path: '/' });
+  res.clearCookie('refreshToken', { httpOnly: true, secure: isProduction, sameSite: 'lax', path: '/' });
 };
 
 const recordLoginHistory = async ({ userId, ipAddress, userAgent, deviceType, authMethodUsed, status = 'SUCCESS' }) => {
@@ -209,8 +217,6 @@ export const login = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'Welcome back! Signed in successfully.',
-      accessToken,
-      refreshToken,
       user: {
         _id: user.id,
         id: user.id,
@@ -378,8 +384,6 @@ export const googleLogin = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: 'All set! Signed in with Google.',
-      accessToken,
-      refreshToken,
       user: {
         _id: user.id,
         id: user.id,
@@ -417,8 +421,7 @@ export const refreshSession = async (req, res, next) => {
       async (err, decoded) => {
         try {
           if (err || !decoded?.userId || !UUID_REGEX.test(String(decoded.userId))) {
-            res.clearCookie('accessToken');
-            res.clearCookie('refreshToken');
+            clearTokenCookies(res);
             return res.status(401).json({
               success: false,
               message: 'Your session has expired. Please sign in again.'
@@ -431,30 +434,50 @@ export const refreshSession = async (req, res, next) => {
           });
 
           if (!user || !user.isActive || user.status === 'DEACTIVATED') {
-            res.clearCookie('accessToken');
-            res.clearCookie('refreshToken');
+            clearTokenCookies(res);
             return res.status(403).json({
               success: false,
               message: 'Your session was revoked or deactivated.'
             });
           }
 
+          // Cryptographic Refresh Token Rotation (RTR) & Reuse Detection
+          // If the presented token does not match the active refresh token in database,
+          // it indicates token theft or replay! Invalidate session immediately.
+          if (user.currentRefreshToken && user.currentRefreshToken !== refreshToken) {
+            await prisma.user.update({
+              where: { id: user.id },
+              data: { currentRefreshToken: null, isOnline: false }
+            });
+            clearTokenCookies(res);
+            await logAuditEvent({
+              req: { ...req, user },
+              action: 'REFRESH_TOKEN_REUSE_DETECTED',
+              module: 'admin',
+              entityId: user.id,
+              entityType: 'User',
+              notes: 'Potential token reuse or replay detected. Active session revoked.'
+            });
+            return res.status(401).json({
+              success: false,
+              message: 'Security Notice: Stale or duplicate session token detected. Please sign in again.'
+            });
+          }
+
           const tokens = generateTokens(user);
           await prisma.user.update({
             where: { id: user.id },
-            data: { currentRefreshToken: tokens.refreshToken }
+            data: { currentRefreshToken: tokens.refreshToken, lastActiveAt: new Date() }
           });
 
           setTokenCookies(res, tokens.accessToken, tokens.refreshToken);
 
           res.status(200).json({
             success: true,
-            accessToken: tokens.accessToken,
-            refreshToken: tokens.refreshToken
+            message: 'Session refreshed successfully.'
           });
         } catch (innerError) {
-          res.clearCookie('accessToken');
-          res.clearCookie('refreshToken');
+          clearTokenCookies(res);
           return res.status(401).json({
             success: false,
             message: 'Session could not be refreshed. Please sign in again.'
@@ -488,8 +511,7 @@ export const logout = async (req, res, next) => {
       });
     }
 
-    res.clearCookie('accessToken');
-    res.clearCookie('refreshToken');
+    clearTokenCookies(res);
 
     res.status(200).json({ success: true, message: 'Signed out successfully.' });
   } catch (error) {

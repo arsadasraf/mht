@@ -91,7 +91,7 @@ export const registerDrawing = async (req, res, next) => {
     if (!projectId || !drawingNumber || !title) {
       return res.status(400).json({
         success: false,
-        message: 'Project ID, Drawing Number, and Title are required.'
+        message: 'Work Order Number, Drawing Number, and Title are required.'
       });
     }
 

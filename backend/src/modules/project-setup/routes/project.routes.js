@@ -5,6 +5,7 @@ import {
   getDepartmentUsers,
   getProjectById,
   createProject,
+  approveProject,
   updateProject,
   deleteProject,
   updateProjectStage
@@ -20,6 +21,7 @@ router.get('/available-customer-pos', getAvailableCustomerPos);
 router.get('/department-users', getDepartmentUsers);
 router.get('/:id', getProjectById);
 router.post('/', createProject);
+router.patch('/:id/approve', approveProject);
 router.put('/:id', updateProject);
 router.delete('/:id', deleteProject);
 router.patch('/:id/stage', updateProjectStage);

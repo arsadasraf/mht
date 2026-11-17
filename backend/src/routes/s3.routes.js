@@ -1,8 +1,11 @@
 import { Router } from 'express';
-import { getUploadUrl, getDownloadUrl, directUpload } from '../controllers/s3.controller.js';
+import { getUploadUrl, getDownloadUrl, directUpload, viewS3Object } from '../controllers/s3.controller.js';
 import { authenticateToken } from '../middleware/auth.middleware.js';
 
 const router = Router();
+
+// Public view redirect endpoint for embedded document/logo rendering
+router.get('/view', viewS3Object);
 
 // Protect all S3 presigned operations with authentication
 router.use(authenticateToken);

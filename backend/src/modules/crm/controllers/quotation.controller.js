@@ -5,6 +5,9 @@ import {
   DEFAULT_CRM_PREFIX_LOCK_POLICY,
   DEFAULT_COMPANY_BILLING_INFO
 } from './crmMaster.controller.js';
+import { generateUniqueSequenceCode } from '../../../utils/sequenceGenerator.js';
+import { generateNextWorkOrderNumber } from '../../project-setup/controllers/project.controller.js';
+import { ensureProjectSetupConfig, DEFAULT_PROJECT_SETUP_POLICY } from '../../project-setup/controllers/stageMaster.controller.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -110,16 +113,17 @@ async function generateNextBaseQuoteNumber(user) {
     ...DEFAULT_CRM_PREFIX_LOCK_POLICY,
     ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
   };
-  const prefix = (policy.quotationPrefix || 'QT-').trim().toUpperCase();
+  const prefix = (policy.quotationPrefix || 'QT-').trim().toUpperCase().replace(/-+$/, '');
   const startSeq = Number(policy.quotationStartSeq) || 1001;
   const year = new Date().getFullYear();
 
-  const distinctRoots = await prisma.quotation.findMany({
-    where: { revisionNumber: 0 },
-    select: { baseQuoteNumber: true }
+  return generateUniqueSequenceCode({
+    model: 'quotation',
+    field: 'baseQuoteNumber',
+    prefix: `${prefix}-${year}-`,
+    startSeq,
+    padLength: 4
   });
-  const nextNum = Math.max(startSeq + distinctRoots.length, distinctRoots.length + 1);
-  return `${prefix}${year}-${String(nextNum).padStart(4, '0')}`;
 }
 
 /**
@@ -749,9 +753,12 @@ export const convertQuotationToProject = async (req, res, next) => {
       return res.status(404).json({ success: false, message: 'Quotation not found.' });
     }
 
-    const year = new Date().getFullYear();
-    const count = await prisma.customerPo.count();
-    const projectId = `PRJ-${year}-${String(count + 1).padStart(4, '0')}`;
+    const psConfig = await ensureProjectSetupConfig(req.user);
+    const psPolicy = {
+      ...DEFAULT_PROJECT_SETUP_POLICY,
+      ...(typeof psConfig.prefixLockPolicy === 'object' ? psConfig.prefixLockPolicy : {})
+    };
+    const projectId = await generateNextWorkOrderNumber(psPolicy);
     const actorName = getActorName(req.user);
 
     const updated = await prisma.quotation.update({

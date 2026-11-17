@@ -7,6 +7,8 @@ model InventoryItem {
   alternateUom     String   @default("Nos")
   conversionRatio  Float    @default(1)
   binLocation      String   @default("BIN-GEN-01")
+  locationName     String   @default("")
+  itemType         String   @default("RM_BO") // RM_BO or DRAWING
   minSafetyStock   Float    @default(0)
 
   // 4-Bucket Inventory Ledger
@@ -29,56 +31,54 @@ model InventoryItem {
   @@map("store_inventory_items")
 }
 
-model StockAllocation {
-  id                         String   @id @default(uuid()) @db.Uuid
-  allocationNumber           String   @unique
-  projectId                  String
-  itemCode                   String
-  itemName                   String   @default("")
-  allocatedQty               Float    @default(0)
-  baseUom                    String   @default("Nos")
-  status                     String   @default("HARD_LOCKED") // HARD_LOCKED, TRANSFER_REQUESTED, TRANSFERRED, ISSUED_TO_PRODUCTION
-  transferRequestedToProject String?
-  managerialApprovalById     String?  @db.Uuid
-  managerialApprovalByName   String   @default("")
-  managerialApprovalNotes    String   @default("")
-
-  // Universal Action Tracking
-  createdById                String?  @db.Uuid
-  createdByName              String   @default("")
-  updatedById                String?  @db.Uuid
-  updatedByName              String   @default("")
-  createdAt                  DateTime @default(now())
-  updatedAt                  DateTime @updatedAt
-
-  @@index([projectId])
-  @@index([itemCode])
-  @@map("store_stock_allocations")
-}
-
 model GrnRecord {
-  id            String   @id @default(uuid()) @db.Uuid
-  grnNumber     String   @unique
-  grnType       String   @default("BO") // RM, BO, COMPONENT, SUB_ASSEMBLY, ASSEMBLY, CONSUMABLE, FG
-  poNumber      String   @default("")
-  projectId     String   @default("")
-  vendorName    String   @default("")
-  invoiceNo     String   @default("")
-  binLocation   String   @default("BIN-QC-HOLD")
-  qcStatus      String   @default("PENDING_IQC") // PENDING_IQC, QC_ACCEPTED, QC_REJECTED
-  items         Json     @default("[]")
-  notes         String   @default("")
+  id                      String    @id @default(uuid()) @db.Uuid
+  grnNumber               String    @unique
+  grnType                 String    @default("BO") // RM, BO, COMPONENT, SUB_ASSEMBLY, ASSEMBLY, CONSUMABLE, FG
+  poNumber                String    @default("")
+  poId                    String?   @db.Uuid
+  projectId               String    @default("")
+  vendorId                String?   @db.Uuid
+  vendorName              String    @default("")
+  invoiceNo               String    @default("")
+  invoiceDate             DateTime?
+  receivedDate            DateTime  @default(now())
+  binLocation             String    @default("General Store")
+  qcStatus                String    @default("PENDING_IQC") // PENDING_IQC, DIRECT_ACCEPTED, QC_ACCEPTED, QC_REJECTED
+  
+  // Multi-Line Items (JSON array of line item objects)
+  items                   Json      @default("[]")
+  
+  // Financial & Tax Breakdown
+  taxableSubtotal         Float     @default(0)
+  totalItemTax            Float     @default(0)
+  
+  // Transportation & Freight
+  transportationCharges   Float     @default(0)
+  transportationGstPercent Float    @default(0)
+  transportationGstAmount Float     @default(0)
+  
+  // Packing & Forwarding
+  packingCharges          Float     @default(0)
+  packingGstPercent       Float     @default(0)
+  packingGstAmount        Float     @default(0)
+  
+  roundOff                Float     @default(0)
+  grandTotal              Float     @default(0)
+  
+  notes                   String    @default("")
 
   // Universal Action Tracking
-  createdById   String?  @db.Uuid
-  createdByName String   @default("")
-  updatedById   String?  @db.Uuid
-  updatedByName String   @default("")
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  createdById             String?   @db.Uuid
+  createdByName           String    @default("")
+  updatedById             String?   @db.Uuid
+  updatedByName           String    @default("")
+  createdAt               DateTime  @default(now())
+  updatedAt               DateTime  @updatedAt
 
   @@index([projectId])
   @@index([poNumber])
+  @@index([vendorName])
   @@map("store_grn_records")
 }
 

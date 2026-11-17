@@ -27,7 +27,14 @@ export const projectApi = apiSlice.injectEndpoints({
         method: 'POST',
         body
       }),
-      invalidatesTags: ['Project', 'Milestone', 'CustomerPo', 'Lead']
+      invalidatesTags: ['Project', 'Milestone', 'CustomerPo', { type: 'CustomerPo', id: 'LIST' }, 'Lead', { type: 'Lead', id: 'LIST' }]
+    }),
+    approveProject: builder.mutation<{ success: boolean; message: string; project: any }, string>({
+      query: (id) => ({
+        url: `/project-setup/projects/${id}/approve`,
+        method: 'PATCH'
+      }),
+      invalidatesTags: ['Project', 'Milestone']
     }),
     updateProject: builder.mutation<{ success: boolean; message: string; project: any }, { id: string; [key: string]: any }>({
       query: ({ id, ...body }) => ({
@@ -35,14 +42,14 @@ export const projectApi = apiSlice.injectEndpoints({
         method: 'PUT',
         body
       }),
-      invalidatesTags: ['Project', 'Milestone', 'CustomerPo', 'Lead']
+      invalidatesTags: ['Project', 'Milestone', 'CustomerPo', { type: 'CustomerPo', id: 'LIST' }, 'Lead', { type: 'Lead', id: 'LIST' }]
     }),
     deleteProject: builder.mutation<{ success: boolean; message: string }, string>({
       query: (id) => ({
         url: `/project-setup/projects/${id}`,
         method: 'DELETE'
       }),
-      invalidatesTags: ['Project', 'Milestone', 'CustomerPo', 'Lead']
+      invalidatesTags: ['Project', 'Milestone', 'CustomerPo', { type: 'CustomerPo', id: 'LIST' }, 'Lead', { type: 'Lead', id: 'LIST' }]
     }),
     getMilestones: builder.query<{ success: boolean; count: number; milestones: any[] }, string>({
       query: (projectId) => `/project-setup/milestones/project/${projectId}`,
@@ -62,7 +69,7 @@ export const projectApi = apiSlice.injectEndpoints({
         method: 'PATCH',
         body
       }),
-      invalidatesTags: ['Milestone', 'Project']
+      invalidatesTags: ['Milestone', 'Project', 'CustomerPo', { type: 'CustomerPo', id: 'LIST' }]
     }),
     addMilestoneRemark: builder.mutation<any, { id: string; text: string; authorName?: string; authorRole?: string }>({
       query: ({ id, ...body }) => ({
@@ -179,7 +186,7 @@ export const projectApi = apiSlice.injectEndpoints({
         method: 'PUT',
         body
       }),
-      invalidatesTags: ['StageMaster']
+      invalidatesTags: ['StageMaster', 'Project', 'Milestone']
     })
   })
 });
@@ -190,6 +197,7 @@ export const {
   useGetDepartmentUsersQuery,
   useGetProjectByIdQuery,
   useCreateProjectMutation,
+  useApproveProjectMutation,
   useUpdateProjectMutation,
   useDeleteProjectMutation,
   useGetMilestonesQuery,

@@ -20,6 +20,7 @@ model VendorPriceAgreement {
   effectiveTo     String   @default("")
   isPreferred     Boolean  @default(true)
   remarks         String   @default("")
+  revisionNumber  String   @default("")
   isActive        Boolean  @default(true)
 
   // Universal Action Tracking
@@ -33,6 +34,7 @@ model VendorPriceAgreement {
   @@index([itemCode])
   @@index([itemType])
   @@index([vendorName])
+  @@index([revisionNumber])
   @@index([isPreferred])
   @@map("purchase_vendor_price_agreements")
 }

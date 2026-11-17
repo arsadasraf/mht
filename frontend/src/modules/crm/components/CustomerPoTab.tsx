@@ -228,6 +228,9 @@ export default function CustomerPoTab() {
     const isStageLocked =
       po.status === 'WORK_ORDER_CREATED' ||
       po.status === 'PROJECT_CONVERTED' ||
+      po.status === 'IN_PROGRESS' ||
+      po.status === 'DISPATCHED' ||
+      po.status === 'COMMISSIONED' ||
       Boolean(po.convertedProjectId);
     const isLocked = remainingMs <= 0 || isStageLocked;
 
@@ -1654,9 +1657,8 @@ export default function CustomerPoTab() {
                 Customer PO {convertSuccess.poNumber} converted to Project Setup:
               </span>{' '}
               <span className="font-mono font-black text-emerald-800 bg-white px-2 py-0.5 rounded border border-emerald-300">
-                {convertSuccess.projectId}
-              </span>{' '}
-              <span className="text-emerald-700 font-mono">({convertSuccess.workOrderNumber})</span>
+                {convertSuccess.workOrderNumber || convertSuccess.projectId}
+              </span>
             </div>
           </div>
           <Link
@@ -1879,7 +1881,7 @@ export default function CustomerPoTab() {
                       <td className="py-3 px-3">
                         <div className="relative inline-block text-left">
                           <select
-                            value={po.status || 'RECEIVED'}
+                            value={po.status === 'PROJECT_CONVERTED' ? 'WORK_ORDER_CREATED' : (po.status || 'RECEIVED')}
                             onChange={(e) => handleUpdateStatus(po, e.target.value as CustomerPoStatus)}
                             className={`appearance-none text-[11px] font-bold px-2.5 py-1.5 pr-6 rounded-xl border cursor-pointer focus:outline-hidden transition-all shadow-2xs ${currentBadge.badgeClass}`}
                           >
@@ -2183,7 +2185,7 @@ export default function CustomerPoTab() {
 
                 <div className="p-3.5 rounded-xl bg-white border border-slate-200 shadow-2xs">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
-                    Work Order / Project ID
+                    Work Order No.
                   </span>
                   {previewingCustomerPo.convertedProjectId ? (
                     <span className="text-sm font-mono font-bold text-emerald-700 block mt-1">

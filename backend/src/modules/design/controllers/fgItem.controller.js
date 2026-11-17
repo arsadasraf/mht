@@ -33,6 +33,7 @@ export const getFgItems = async (req, res, next) => {
       where.OR = [
         { name: { contains: q, mode: 'insensitive' } },
         { description: { contains: q, mode: 'insensitive' } },
+        { make: { contains: q, mode: 'insensitive' } },
         { categoryName: { contains: q, mode: 'insensitive' } },
         { revision: { contains: q, mode: 'insensitive' } },
         { hsnCode: { contains: q, mode: 'insensitive' } }
@@ -67,6 +68,7 @@ export const createFgItem = async (req, res, next) => {
       categoryName,
       revision,
       description,
+      make,
       uom,
       hsnCode,
       photos,
@@ -121,6 +123,7 @@ export const createFgItem = async (req, res, next) => {
         categoryName: (categoryName || '').trim(),
         revision: cleanRevision,
         description: (description || '').trim(),
+        make: (make || '').trim(),
         uom: (uom || 'NOS').trim(),
         hsnCode: (hsnCode || '8479').trim(),
         photos: normalizedPhotos,
@@ -172,6 +175,7 @@ export const updateFgItem = async (req, res, next) => {
       categoryName,
       revision,
       description,
+      make,
       uom,
       hsnCode,
       isActive,
@@ -247,6 +251,7 @@ export const updateFgItem = async (req, res, next) => {
         categoryName: categoryName !== undefined ? categoryName.trim() : existing.categoryName,
         revision: cleanRevision,
         description: description !== undefined ? description.trim() : existing.description,
+        make: make !== undefined ? make.trim() : existing.make,
         uom: uom !== undefined ? uom.trim() : existing.uom,
         hsnCode: hsnCode !== undefined ? hsnCode.trim() : existing.hsnCode,
         isActive: isActive !== undefined ? Boolean(isActive) : existing.isActive,
@@ -579,6 +584,7 @@ export const bulkImportFgItems = async (req, res, next) => {
       const rowCategoryCode = String(row.categoryCode || row.category || '').trim();
       const rowCategoryName = String(row.categoryName || row.category || '').trim();
       const rowDescription = String(row.description || '').trim();
+      const rowMake = String(row.make || row.brand || row['Make / Brand'] || row['Make'] || '').trim();
       const rowUom = String(row.uom || 'Nos').trim();
       const rowHsnCode = String(row.hsnCode || '8479').trim();
 
@@ -593,6 +599,7 @@ export const bulkImportFgItems = async (req, res, next) => {
             isActive: true,
             classification: validClass,
             description: rowDescription,
+            make: rowMake,
             categoryCode: rowCategoryCode,
             categoryName: rowCategoryName,
             uom: rowUom,
@@ -612,6 +619,7 @@ export const bulkImportFgItems = async (req, res, next) => {
         categoryCode: rowCategoryCode,
         categoryName: rowCategoryName,
         description: rowDescription,
+        make: rowMake,
         uom: rowUom,
         hsnCode: rowHsnCode,
         bomItems: [],

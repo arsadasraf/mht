@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useMemo } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAppDispatch } from '../../../store/hooks';
+import { useAppDispatch, useAppSelector } from '../../../store/hooks';
 import {
   FolderGit2,
   Plus,
@@ -32,11 +32,14 @@ import {
   Info,
   Edit2,
   Trash2,
-  ListPlus
+  ListPlus,
+  Printer,
+  Download
 } from 'lucide-react';
 import {
   useGetProjectsQuery,
   useCreateProjectMutation,
+  useApproveProjectMutation,
   useUpdateProjectMutation,
   useDeleteProjectMutation,
   useGetAvailableCustomerPosQuery,
@@ -44,6 +47,7 @@ import {
 } from '../api/projectApi';
 import { setActiveProjectId, addToast } from '../../../store/uiSlice';
 import ExcelColumnFilter, { DistinctValueItem } from '../../../components/ui/ExcelColumnFilter';
+import WorkOrderBomBadge from '../../../components/ui/WorkOrderBomBadge';
 
 export default function ProjectsTab() {
   const router = useRouter();
@@ -51,14 +55,208 @@ export default function ProjectsTab() {
 
   // Queries & Mutations
   const { data, isLoading } = useGetProjectsQuery({});
-  const { data: customerPoData } = useGetAvailableCustomerPosQuery();
+  const { data: customerPoData, refetch: refetchAvailablePos } = useGetAvailableCustomerPosQuery();
   const { data: stageMastersData } = useGetStageMastersQuery();
   const [createProject, { isLoading: isCreating }] = useCreateProjectMutation();
+  const [approveProject, { isLoading: isApproving }] = useApproveProjectMutation();
   const [updateProject, { isLoading: isUpdating }] = useUpdateProjectMutation();
   const [deleteProject, { isLoading: isDeleting }] = useDeleteProjectMutation();
+  const currentUser = useAppSelector((state: any) => state.auth?.user);
+
+  const masterPolicy = useMemo(
+    () => (stageMastersData as any)?.prefixLockPolicy || {},
+    [stageMastersData]
+  );
+
+  // Live 1-second ticker for real-time Edit & Delete countdown display
+  const [nowMs, setNowMs] = useState<number>(() => Date.now());
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setNowMs(Date.now());
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
+
+  const formatRemainingCountdown = (remainingMs: number) => {
+    const totalSeconds = Math.max(0, Math.floor(remainingMs / 1000));
+    const days = Math.floor(totalSeconds / 86400);
+    const hours = Math.floor((totalSeconds % 86400) / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+    const hh = String(hours).padStart(2, '0');
+    const mm = String(minutes).padStart(2, '0');
+    const ss = String(seconds).padStart(2, '0');
+    return days > 0 ? `${days}d ${hh}:${mm}:${ss}` : `${hh}:${mm}:${ss}`;
+  };
+
+  const getWorkOrderStatusMeta = (rawStatus?: string) => {
+    const st = String(rawStatus || 'CREATED').toUpperCase();
+    switch (st) {
+      case 'CREATED':
+        return {
+          label: 'Created (Pending Approval)',
+          shortLabel: 'Created',
+          className: 'bg-amber-50 text-amber-700 border border-amber-200'
+        };
+      case 'APPROVED':
+        return {
+          label: 'Approved',
+          shortLabel: 'Approved',
+          className: 'bg-sky-50 text-sky-700 border border-sky-200'
+        };
+      case 'ASSIGNED_TO_DEPARTMENT':
+        return {
+          label: 'Assigned to Department',
+          shortLabel: 'Assigned to Dept',
+          className: 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+        };
+      case 'IN_PROGRESS':
+      case 'ACTIVE':
+        return {
+          label: 'In Progress',
+          shortLabel: 'In Progress',
+          className: 'bg-orange-50 text-orange-700 border border-orange-200'
+        };
+      case 'COMPLETED':
+        return {
+          label: 'Completed',
+          shortLabel: 'Completed',
+          className: 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+        };
+      default:
+        return {
+          label: st.replace(/_/g, ' '),
+          shortLabel: st.replace(/_/g, ' '),
+          className: 'bg-slate-100 text-slate-700 border border-slate-200'
+        };
+    }
+  };
+
+  const checkProjectTimeWindow = (project: any, actionType: 'EDIT' | 'DELETE') => {
+    const isEdit = actionType === 'EDIT';
+    const shortAction = isEdit ? 'Edit' : 'Del';
+    const mode = String(
+      (isEdit ? masterPolicy.editTimeLimitMode : masterPolicy.deleteTimeLimitMode) || 'UNLIMITED'
+    ).toUpperCase();
+
+    if (mode === 'UNLIMITED') {
+      return {
+        allowed: true,
+        mode: 'UNLIMITED',
+        countdownText: 'Unlimited',
+        shortCountdown: '∞',
+        badgeText: `${shortAction}: ∞`,
+        message: ''
+      };
+    }
+
+    const limitHours = Number(
+      isEdit ? masterPolicy.editTimeLimitHours ?? 0 : masterPolicy.deleteTimeLimitHours ?? 0
+    );
+    const label = isEdit ? 'editing' : 'deleting';
+
+    if (isNaN(limitHours) || limitHours <= 0) {
+      return {
+        allowed: false,
+        mode: 'LIMITED',
+        countdownText: 'Locked (0h)',
+        shortCountdown: 'Locked',
+        badgeText: `${shortAction}: Locked`,
+        message: `Just a heads up: ${label} Work Orders is locked (0 hours limit) in Project Setup > Masters > Approval & Time Policy.`
+      };
+    }
+
+    const createdMs = project?.createdAt ? new Date(project.createdAt).getTime() : nowMs;
+    const deadlineMs = createdMs + limitHours * 3600 * 1000;
+    const remainingMs = deadlineMs - nowMs;
+
+    if (remainingMs <= 0) {
+      return {
+        allowed: false,
+        mode: 'LIMITED',
+        countdownText: '00:00:00 (Expired)',
+        shortCountdown: 'Expired',
+        badgeText: `${shortAction}: Expired`,
+        message: `Just a heads up: the ${limitHours}-hour time window for ${label} Work Order "${project.workOrderNumber}" has expired.`
+      };
+    }
+
+    const formatted = formatRemainingCountdown(remainingMs);
+    return {
+      allowed: true,
+      mode: 'LIMITED',
+      countdownText: formatted,
+      shortCountdown: formatted,
+      badgeText: `${shortAction}: ${formatted}`,
+      message: ''
+    };
+  };
+
+  const handleApproveProject = async (project: any) => {
+    const approverIds: string[] = Array.isArray(masterPolicy.approverUserIds)
+      ? masterPolicy.approverUserIds.filter(Boolean)
+      : [];
+    const currentUserId = currentUser?.id || currentUser?._id;
+
+    if (approverIds.length > 0 && currentUserId && !approverIds.includes(currentUserId)) {
+      const names = Array.isArray(masterPolicy.approverUsers)
+        ? masterPolicy.approverUsers.map((u: any) => u.name).filter(Boolean).join(', ')
+        : 'assigned approvers';
+      dispatch(
+        addToast({
+          type: 'warning',
+          title: 'Approval Restricted',
+          message: `Only assigned approver(s) (${names}) can approve this Work Order.`
+        })
+      );
+      return;
+    }
+
+    try {
+      const res = await approveProject(project.id || project.workOrderNumber).unwrap();
+      dispatch(
+        addToast({
+          type: 'success',
+          title: 'Work Order Approved',
+          message:
+            res.message ||
+            `All set! Work Order ${project.workOrderNumber} is now approved and visible to assigned departments.`
+        })
+      );
+      if (previewProject && (previewProject.id === project.id || previewProject.workOrderNumber === project.workOrderNumber)) {
+        setPreviewProject(res.project);
+      }
+      if (woPdfProject && (woPdfProject.id === project.id || woPdfProject.workOrderNumber === project.workOrderNumber)) {
+        setWoPdfProject(res.project);
+      }
+    } catch (err: any) {
+      dispatch(
+        addToast({
+          type: 'error',
+          title: 'Approval Failed',
+          message: err?.data?.message || 'We could not approve this Work Order right now.'
+        })
+      );
+    }
+  };
 
   const projects = data?.projects || [];
-  const availablePos = customerPoData?.customerPos || [];
+  const rawAvailablePos = customerPoData?.customerPos || [];
+  const availablePos = useMemo(() => {
+    const usedPoIds = new Set(projects.map((p: any) => p.customerPoId).filter(Boolean));
+    const usedPoNumbers = new Set(
+      projects.map((p: any) => (p.customerPoNumber || '').trim().toUpperCase()).filter(Boolean)
+    );
+    return rawAvailablePos.filter((po: any) => {
+      if (!po.orderAcceptanceNumber || !String(po.orderAcceptanceNumber).trim()) return false;
+      if (po.status !== 'OA_ISSUED') return false;
+      if (po.convertedProjectId) return false;
+      const poId = po._id || po.id;
+      if (poId && usedPoIds.has(poId)) return false;
+      if (po.poNumber && usedPoNumbers.has(String(po.poNumber).trim().toUpperCase())) return false;
+      return true;
+    });
+  }, [rawAvailablePos, projects]);
   const stageMasters = stageMastersData?.stages || [];
 
   // Dedicated In-Line Search Bar State
@@ -96,6 +294,9 @@ export default function ProjectsTab() {
   const [previewProject, setPreviewProject] = useState<any | null>(null);
   const [dossierActiveTab, setDossierActiveTab] = useState<'basic' | 'stages' | 'design-substages'>('basic');
 
+  // Official Work Order PDF Sheet Modal State
+  const [woPdfProject, setWoPdfProject] = useState<any | null>(null);
+
   // Create / Edit Project Modal State
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [modalMode, setModalMode] = useState<'CREATE' | 'EDIT'>('CREATE');
@@ -116,6 +317,8 @@ export default function ProjectsTab() {
   const [customerName, setCustomerName] = useState('');
   const [machineModel, setMachineModel] = useState('');
   const [productDescription, setProductDescription] = useState('');
+  const [costCenter, setCostCenter] = useState('Modification');
+  const [techSpec, setTechSpec] = useState('NA');
   const [deliveryCommitmentDate, setDeliveryCommitmentDate] = useState('');
   const [targetDispatchDate, setTargetDispatchDate] = useState('');
   const [currency, setCurrency] = useState('INR');
@@ -134,76 +337,35 @@ export default function ProjectsTab() {
     }>
   >([]);
 
-  // Standard Stages Template Reference (Available for on-demand loading)
-  const standardTemplateStages = useMemo(() => [
-    {
-      stageCode: 'DESIGN_BOM',
-      title: 'Design & Engineering (BOM)',
-      leadRole: 'Lead Design Engineer',
-      weightPercent: 20,
-      daysOffset: 14,
-      defaultNotes: 'Complete 3D CAD modeling, component selection, and BOM release.'
-    },
-    {
-      stageCode: 'PURCHASE_DEMAND',
-      title: 'Procurement & Sourcing',
-      leadRole: 'Purchase Officer',
-      weightPercent: 20,
-      daysOffset: 30,
-      defaultNotes: 'Issue POs for long-lead bought-out items and raw materials.'
-    },
-    {
-      stageCode: 'STORE_ISSUE',
-      title: 'Store & Material Kitting',
-      leadRole: 'Store In-Charge',
-      weightPercent: 15,
-      daysOffset: 45,
-      defaultNotes: 'Verify inward QC gate entries and kit mechanical/electrical sub-assemblies.'
-    },
-    {
-      stageCode: 'PRODUCTION',
-      title: 'Production & Machining',
-      leadRole: 'Production Manager',
-      weightPercent: 25,
-      daysOffset: 70,
-      defaultNotes: 'Base frame welding, machining, and sub-assembly integration.'
-    },
-    {
-      stageCode: 'QUALITY_PDI',
-      title: 'Quality Testing & PDI',
-      leadRole: 'Quality Head',
-      weightPercent: 10,
-      daysOffset: 80,
-      defaultNotes: 'Run dry cycle trial, calibration, electrical safety, and customer inspection.'
-    },
-    {
-      stageCode: 'DISPATCH_READY',
-      title: 'Packaging & Final Dispatch',
-      leadRole: 'Dispatch In-Charge',
-      weightPercent: 10,
-      daysOffset: 90,
-      defaultNotes: 'Anti-rust packing, wooden crating, dispatch documentation, and transport.'
-    }
-  ], []);
-
-  // Add a new department stage row
+  // Add a new department stage row from active Stage Masters
   const handleAddStage = () => {
+    if (stageMasters.length === 0) {
+      dispatch(
+        addToast({
+          type: 'warning',
+          title: 'No Department Stages Found',
+          message: 'Please create department stages in Project Setup > Masters > Department Stages first.'
+        })
+      );
+      return;
+    }
+
     const nextOrder = configuredStages.length + 1;
     const target = new Date();
     target.setDate(target.getDate() + nextOrder * 14);
 
     const usedCodes = new Set(configuredStages.map((s) => s.stageCode));
-    const candidate = stageMasters.find((sm: any) => !usedCodes.has(sm.stageCode));
+    const candidate = stageMasters.find((sm: any) => !usedCodes.has(sm.stageCode)) || stageMasters[0];
 
     setConfiguredStages((prev) => [
       ...prev,
       {
-        stageCode: candidate?.stageCode || (nextOrder === 1 ? 'DESIGN_BOM' : `STAGE_${nextOrder}`),
-        title: candidate?.stageName || (nextOrder === 1 ? 'Design & Engineering (BOM)' : `Department Stage ${nextOrder}`),
-        leadRole: candidate?.leadRole || 'Project Lead',
-        weightPercent: candidate?.weightPercent || 15,
+        stageCode: candidate.stageCode,
+        title: candidate.stageName,
+        leadRole: candidate.leadRole || 'Project Lead',
+        weightPercent: candidate.weightPercent || 15,
         targetDate: target.toISOString().split('T')[0],
-        notes: ''
+        notes: candidate.description || ''
       }
     ]);
   };
@@ -213,48 +375,87 @@ export default function ProjectsTab() {
     setConfiguredStages((prev) => prev.filter((_, i) => i !== index));
   };
 
-  // Optional: Load template stages on demand
+  // Load all active stages from Department Stage Masters
   const handleLoadStandardStages = () => {
-    const stagesToUse = stageMasters.length > 0
-      ? stageMasters.map((sm: any, idx: number) => {
-          const target = new Date();
-          target.setDate(target.getDate() + (sm.standardDaysOffset || (idx + 1) * 14));
-          return {
-            stageCode: sm.stageCode,
-            title: sm.stageName,
-            leadRole: sm.leadRole || 'Department Lead',
-            weightPercent: sm.weightPercent || 15,
-            targetDate: target.toISOString().split('T')[0],
-            notes: sm.description || ''
-          };
+    if (stageMasters.length === 0) {
+      dispatch(
+        addToast({
+          type: 'warning',
+          title: 'No Department Stages Found',
+          message: 'Please create stages in Project Setup > Masters > Department Stages first.'
         })
-      : standardTemplateStages.map((st) => {
-          const target = new Date();
-          target.setDate(target.getDate() + st.daysOffset);
-          return {
-            stageCode: st.stageCode,
-            title: st.title,
-            leadRole: st.leadRole,
-            weightPercent: st.weightPercent,
-            targetDate: target.toISOString().split('T')[0],
-            notes: st.defaultNotes
-          };
-        });
+      );
+      return;
+    }
+
+    const stagesToUse = stageMasters.map((sm: any, idx: number) => {
+      const target = new Date();
+      target.setDate(target.getDate() + (sm.standardDaysOffset || (idx + 1) * 14));
+      return {
+        stageCode: sm.stageCode,
+        title: sm.stageName,
+        leadRole: sm.leadRole || 'Department Lead',
+        weightPercent: sm.weightPercent || 15,
+        targetDate: target.toISOString().split('T')[0],
+        notes: sm.description || ''
+      };
+    });
 
     setConfiguredStages(stagesToUse);
   };
 
-  // Generate Suggested Next WO & Project IDs
+  // Generate Suggested Next Work Order Number from Master Policy (Guaranteed Collision-Free)
   const generateSuggestedIds = () => {
     const currentYear = new Date().getFullYear();
-    const count = projects.length + 1;
-    const seq = String(1000 + count).padStart(4, '0');
-    setWorkOrderNumber(`WO-${currentYear}-${seq}`);
-    setProjectId(`PRJ-${currentYear}-${seq}`);
+    const policy = (stageMastersData as any)?.prefixLockPolicy || {};
+    const prefix = String(policy.workOrderPrefix || 'WO').trim().toUpperCase().replace(/-+$/, '');
+    const startSeq = Number(policy.workOrderStartSeq || policy.projectStartSeq) || 1001;
+
+    const usedNumbers = new Set<string>();
+    let maxSeq = startSeq - 1;
+    projects.forEach((p: any) => {
+      const wo = String(p.workOrderNumber || p.projectId || '').trim().toUpperCase();
+      if (wo) usedNumbers.add(wo);
+      if (p.projectId) usedNumbers.add(String(p.projectId).trim().toUpperCase());
+      const match = wo.match(/-(\d+)$/);
+      if (match) {
+        const num = parseInt(match[1], 10);
+        if (!isNaN(num) && num > maxSeq) maxSeq = num;
+      }
+    });
+
+    let candidateSeq = Math.max(startSeq, maxSeq + 1);
+    let nextWo = `${prefix}-${currentYear}-${String(candidateSeq).padStart(4, '0')}`;
+    while (usedNumbers.has(nextWo.toUpperCase())) {
+      candidateSeq += 1;
+      nextWo = `${prefix}-${currentYear}-${String(candidateSeq).padStart(4, '0')}`;
+    }
+
+    setWorkOrderNumber(nextWo);
+    setProjectId(nextWo);
   };
+
+  // Real-time live duplicate detection for Work Order Number
+  const duplicateWorkOrderProject = useMemo(() => {
+    const cleanWo = workOrderNumber.trim().toUpperCase();
+    if (!cleanWo) return null;
+    return (
+      projects.find((p: any) => {
+        if (modalMode === 'EDIT' && editProjectId) {
+          if (p.id === editProjectId || p._id === editProjectId || p.projectId === editProjectId) {
+            return false;
+          }
+        }
+        const existingWo = String(p.workOrderNumber || p.projectId || '').trim().toUpperCase();
+        const existingPrj = String(p.projectId || '').trim().toUpperCase();
+        return existingWo === cleanWo || existingPrj === cleanWo;
+      }) || null
+    );
+  }, [workOrderNumber, projects, modalMode, editProjectId]);
 
   // Open Create Modal (Empty stages by default)
   const handleOpenCreateModal = () => {
+    refetchAvailablePos();
     setModalMode('CREATE');
     setEditProjectId(null);
     generateSuggestedIds();
@@ -264,6 +465,8 @@ export default function ProjectsTab() {
     setCustomerName('');
     setMachineModel('');
     setProductDescription('');
+    setCostCenter('Modification');
+    setTechSpec('NA');
     setDeliveryCommitmentDate('');
     setTargetDispatchDate('');
     setAmount('');
@@ -273,6 +476,17 @@ export default function ProjectsTab() {
 
   // Open Edit Modal pre-filled
   const handleOpenEditModal = (project: any) => {
+    const check = checkProjectTimeWindow(project, 'EDIT');
+    if (!check.allowed) {
+      dispatch(
+        addToast({
+          type: 'warning',
+          title: 'Edit Window Expired',
+          message: check.message
+        })
+      );
+      return;
+    }
     setModalMode('EDIT');
     setEditProjectId(project.id || project.projectId);
     setWorkOrderNumber(project.workOrderNumber || '');
@@ -281,6 +495,8 @@ export default function ProjectsTab() {
     setCustomerName(project.customerName || '');
     setMachineModel(project.machineModel || '');
     setProductDescription(project.productDescription || '');
+    setCostCenter(project.costCenter || project.contractValue?.costCenter || 'Modification');
+    setTechSpec(project.techSpec || project.contractValue?.techSpec || 'NA');
     setDeliveryCommitmentDate(
       project.deliveryCommitmentDate
         ? new Date(project.deliveryCommitmentDate).toISOString().split('T')[0]
@@ -391,20 +607,25 @@ export default function ProjectsTab() {
     }
 
     try {
+      const cleanWo = workOrderNumber.trim().toUpperCase();
       const payload: any = {
-        workOrderNumber: workOrderNumber.trim(),
-        projectId: projectId.trim(),
+        workOrderNumber: cleanWo,
+        projectId: cleanWo,
         projectName: projectName.trim() || `${customerName} — ${machineModel}`,
         customerName: customerName.trim(),
         machineModel: machineModel.trim(),
         productDescription: productDescription.trim(),
+        costCenter: costCenter.trim() || 'Modification',
+        techSpec: techSpec.trim() || 'NA',
         deliveryCommitmentDate: deliveryCommitmentDate ? new Date(deliveryCommitmentDate) : undefined,
         targetDispatchDate: targetDispatchDate ? new Date(targetDispatchDate) : undefined,
         customerPoId: creationMode === 'CUSTOMER_PO' ? selectedPoId : undefined,
         contractValue: {
           currency,
           amount: Number(amount) || 0,
-          exchangeRate: Number(exchangeRate) || 1.0
+          exchangeRate: Number(exchangeRate) || 1.0,
+          costCenter: costCenter.trim() || 'Modification',
+          techSpec: techSpec.trim() || 'NA'
         },
         stages: configuredStages.map((st, idx) => ({
           stageCode: st.stageCode,
@@ -427,6 +648,9 @@ export default function ProjectsTab() {
         );
         if (previewProject && (previewProject.id === editProjectId || previewProject.projectId === editProjectId)) {
           setPreviewProject(res.project);
+        }
+        if (woPdfProject && (woPdfProject.id === editProjectId || woPdfProject.projectId === editProjectId)) {
+          setWoPdfProject(res.project);
         }
       } else {
         const res = await createProject(payload).unwrap();
@@ -593,6 +817,100 @@ export default function ProjectsTab() {
     }
   };
 
+  // Formats date as DD-MMM-YY (e.g. 14-Aug-26) for official Machine House Work Order sheet
+  const formatWoSheetDate = (dateStr?: string) => {
+    if (!dateStr) return '';
+    try {
+      const d = new Date(dateStr);
+      if (isNaN(d.getTime())) return '';
+      const day = String(d.getDate()).padStart(2, '0');
+      const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+      const mon = months[d.getMonth()];
+      const yr = String(d.getFullYear()).slice(-2);
+      return `${day}-${mon}-${yr}`;
+    } catch {
+      return '';
+    }
+  };
+
+  // Isolated Single-Page A4 Portrait Print / Download PDF Handler for Work Order Sheet
+  const handlePrintWorkOrderPdf = () => {
+    const printContent = document.getElementById('wo-printable-document');
+    if (!printContent || !woPdfProject) {
+      window.print();
+      return;
+    }
+
+    const iframe = document.createElement('iframe');
+    iframe.className = 'fixed right-0 bottom-0 w-0 h-0 border-0 opacity-0 pointer-events-none';
+    document.body.appendChild(iframe);
+
+    const doc = iframe.contentWindow?.document;
+    if (!doc) {
+      document.body.removeChild(iframe);
+      return;
+    }
+
+    const styles = Array.from(document.querySelectorAll('style, link[rel="stylesheet"]'))
+      .map((el) => el.outerHTML)
+      .join('\n');
+
+    const safeTitle = `Work_Order_${String(woPdfProject.workOrderNumber || 'WO').replace(/[^a-zA-Z0-9_-]/g, '_')}`;
+
+    doc.open();
+    doc.write(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>${safeTitle}</title>
+          ${styles}
+          <style>
+            @page {
+              size: A4 portrait;
+              margin: 8mm;
+            }
+            html, body {
+              margin: 0 !important;
+              padding: 0 !important;
+              background: #ffffff !important;
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+              font-family: 'Times New Roman', Times, serif;
+            }
+            * {
+              -webkit-print-color-adjust: exact !important;
+              print-color-adjust: exact !important;
+              color-adjust: exact !important;
+            }
+            #wo-print-wrapper {
+              width: 100%;
+              max-width: 194mm;
+              margin: 0 auto;
+            }
+          </style>
+        </head>
+        <body>
+          <div id="wo-print-wrapper">
+            ${printContent.innerHTML}
+          </div>
+        </body>
+      </html>
+    `);
+    doc.close();
+
+    setTimeout(() => {
+      iframe.contentWindow?.focus();
+      iframe.contentWindow?.print();
+      setTimeout(() => {
+        if (document.body.contains(iframe)) {
+          document.body.removeChild(iframe);
+        }
+      }, 1500);
+    }, 450);
+  };
+
   const previewDesignSubStages = useMemo(() => {
     if (!previewProject?.milestones) return [];
     const designMilestone = previewProject.milestones.find(
@@ -615,7 +933,7 @@ export default function ProjectsTab() {
             type="text"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search projects by WO, Project ID, Customer, Machine, PO..."
+            placeholder="Search projects by Work Order No., Customer, Machine, PO..."
             className="w-full pl-9 pr-9 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 transition-all placeholder:text-slate-400"
           />
           {searchTerm && (
@@ -681,20 +999,6 @@ export default function ProjectsTab() {
                 </th>
                 <th className="py-3 px-3">
                   <ExcelColumnFilter
-                    title="Project ID"
-                    columnKey="projectId"
-                    distinctValues={distinctValues.projectId}
-                    selectedValues={excelFilters.projectId}
-                    onFilterChange={(selected) =>
-                      setExcelFilters((prev) => ({ ...prev, projectId: selected }))
-                    }
-                    currentSortField={sortField}
-                    currentSortDirection={sortDirection}
-                    onSortChange={handleSortChange}
-                  />
-                </th>
-                <th className="py-3 px-3">
-                  <ExcelColumnFilter
                     title="Customer PO"
                     columnKey="customerPoNumber"
                     distinctValues={distinctValues.customerPoNumber}
@@ -744,20 +1048,6 @@ export default function ProjectsTab() {
                 <th className="py-3 px-3 text-right">Contract Value</th>
                 <th className="py-3 px-3">
                   <ExcelColumnFilter
-                    title="Stage"
-                    columnKey="currentStage"
-                    distinctValues={distinctValues.currentStage}
-                    selectedValues={excelFilters.currentStage}
-                    onFilterChange={(selected) =>
-                      setExcelFilters((prev) => ({ ...prev, currentStage: selected }))
-                    }
-                    currentSortField={sortField}
-                    currentSortDirection={sortDirection}
-                    onSortChange={handleSortChange}
-                  />
-                </th>
-                <th className="py-3 px-3">
-                  <ExcelColumnFilter
                     title="Status"
                     columnKey="status"
                     distinctValues={distinctValues.status}
@@ -768,6 +1058,7 @@ export default function ProjectsTab() {
                     currentSortField={sortField}
                     currentSortDirection={sortDirection}
                     onSortChange={handleSortChange}
+                    align="right"
                   />
                 </th>
                 <th className="py-3 px-4 text-center w-36">Actions</th>
@@ -776,13 +1067,13 @@ export default function ProjectsTab() {
             <tbody className="divide-y divide-slate-100 text-xs text-slate-700">
               {isLoading ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center text-slate-400">
+                  <td colSpan={9} className="py-12 text-center text-slate-400">
                     Loading project records...
                   </td>
                 </tr>
               ) : filteredProjects.length === 0 ? (
                 <tr>
-                  <td colSpan={11} className="py-12 text-center">
+                  <td colSpan={9} className="py-12 text-center">
                     <div className="max-w-sm mx-auto text-center space-y-2">
                       <Cpu className="w-8 h-8 text-slate-300 mx-auto" />
                       <p className="text-xs font-bold text-slate-700">No project records match criteria.</p>
@@ -816,11 +1107,13 @@ export default function ProjectsTab() {
                           <span className="px-2 py-0.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 text-xs">
                             {row.workOrderNumber}
                           </span>
+                          <WorkOrderBomBadge
+                            isBomLocked={row.isBomLocked}
+                            bomStatus={row.bomStatus}
+                            bomAttached={row.bomAttached}
+                            attachedDrawingsCount={row.attachedDrawingsCount}
+                          />
                         </div>
-                      </td>
-
-                      <td className="py-3.5 px-3 font-mono font-semibold text-slate-700">
-                        {row.projectId}
                       </td>
 
                       <td className="py-3.5 px-3">
@@ -858,70 +1151,129 @@ export default function ProjectsTab() {
                       </td>
 
                       <td className="py-3.5 px-3">
-                        <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold uppercase bg-slate-100 text-slate-700">
-                          {row.currentStage?.replace(/_/g, ' ')}
-                        </span>
-                      </td>
-
-                      <td className="py-3.5 px-3">
-                        <span
-                          className={`px-2 py-0.5 rounded-full text-[10px] font-bold ${
-                            row.status === 'ACTIVE'
-                              ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
-                              : 'bg-slate-100 text-slate-600'
-                          }`}
-                        >
-                          {row.status}
-                        </span>
+                        {(() => {
+                          const meta = getWorkOrderStatusMeta(row.status);
+                          return (
+                            <span
+                              className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[10px] font-bold ${meta.className}`}
+                              title={meta.label}
+                            >
+                              {meta.shortLabel}
+                            </span>
+                          );
+                        })()}
                       </td>
 
                       <td
                         className="py-3.5 px-4 text-center"
                         onClick={(e) => e.stopPropagation()}
                       >
-                        <div className="flex items-center justify-center gap-1">
-                          {/* Preview Button */}
-                          <button
-                            onClick={() => {
-                              setPreviewProject(row);
-                              setDossierActiveTab('basic');
-                            }}
-                            title="Preview Dossier"
-                            className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                          >
-                            <Eye className="w-4 h-4" />
-                          </button>
+                        {(() => {
+                          const editWin = checkProjectTimeWindow(row, 'EDIT');
+                          const delWin = checkProjectTimeWindow(row, 'DELETE');
+                          return (
+                            <div className="flex flex-col items-center gap-1.5">
+                              <div className="flex items-center justify-center gap-1">
+                                {/* Preview Button */}
+                                <button
+                                  onClick={() => {
+                                    setPreviewProject(row);
+                                    setDossierActiveTab('basic');
+                                  }}
+                                  title="Preview Dossier"
+                                  className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                                >
+                                  <Eye className="w-4 h-4" />
+                                </button>
 
-                          {/* Edit Button */}
-                          <button
-                            onClick={() => handleOpenEditModal(row)}
-                            title="Edit Project"
-                            className="p-1.5 text-orange-500 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors"
-                          >
-                            <Edit2 className="w-4 h-4" />
-                          </button>
+                                {/* Edit Button */}
+                                <button
+                                  onClick={() => handleOpenEditModal(row)}
+                                  title={
+                                    editWin.allowed
+                                      ? `Edit Work Order (${editWin.countdownText})`
+                                      : editWin.message
+                                  }
+                                  className={`p-1.5 rounded-lg transition-colors ${
+                                    editWin.allowed
+                                      ? 'text-orange-500 hover:text-orange-700 hover:bg-orange-50'
+                                      : 'text-slate-300 cursor-not-allowed'
+                                  }`}
+                                >
+                                  <Edit2 className="w-4 h-4" />
+                                </button>
 
-                          {/* Delete Button */}
-                          <button
-                            onClick={() => setDeleteConfirm({ isOpen: true, project: row })}
-                            title="Delete Project"
-                            className="p-1.5 text-red-500 hover:text-red-700 hover:bg-red-50 rounded-lg transition-colors"
-                          >
-                            <Trash2 className="w-4 h-4" />
-                          </button>
+                                {/* Delete Button */}
+                                <button
+                                  onClick={() => {
+                                    if (!delWin.allowed) {
+                                      dispatch(
+                                        addToast({
+                                          type: 'warning',
+                                          title: 'Delete Window Expired',
+                                          message: delWin.message
+                                        })
+                                      );
+                                      return;
+                                    }
+                                    setDeleteConfirm({ isOpen: true, project: row });
+                                  }}
+                                  title={
+                                    delWin.allowed
+                                      ? `Delete Work Order (${delWin.countdownText})`
+                                      : delWin.message
+                                  }
+                                  className={`p-1.5 rounded-lg transition-colors ${
+                                    delWin.allowed
+                                      ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
+                                      : 'text-slate-300 cursor-not-allowed'
+                                  }`}
+                                >
+                                  <Trash2 className="w-4 h-4" />
+                                </button>
+                              </div>
 
-                          {/* Kanban Button */}
-                          <button
-                            onClick={() => {
-                              dispatch(setActiveProjectId(row.projectId));
-                              router.push('/project-setup/kanban');
-                            }}
-                            title="Open in Kanban"
-                            className="p-1.5 text-slate-400 hover:text-orange-600 hover:bg-orange-50 rounded-lg transition-colors"
-                          >
-                            <Kanban className="w-4 h-4" />
-                          </button>
-                        </div>
+                              {/* Live Edit & Delete Countdown Pills */}
+                              <div className="flex items-center justify-center gap-1 flex-wrap">
+                                <span
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+                                    !editWin.allowed
+                                      ? 'bg-red-50 text-red-600 border-red-200'
+                                      : editWin.mode === 'LIMITED'
+                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                      : 'bg-slate-50 text-slate-600 border-slate-200'
+                                  }`}
+                                  title={
+                                    editWin.allowed
+                                      ? `Editable time remaining: ${editWin.countdownText}`
+                                      : editWin.message
+                                  }
+                                >
+                                  <Clock className="w-2.5 h-2.5 shrink-0" />
+                                  <span>{editWin.badgeText}</span>
+                                </span>
+
+                                <span
+                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+                                    !delWin.allowed
+                                      ? 'bg-red-50 text-red-600 border-red-200'
+                                      : delWin.mode === 'LIMITED'
+                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                      : 'bg-slate-50 text-slate-600 border-slate-200'
+                                  }`}
+                                  title={
+                                    delWin.allowed
+                                      ? `Deletable time remaining: ${delWin.countdownText}`
+                                      : delWin.message
+                                  }
+                                >
+                                  <Clock className="w-2.5 h-2.5 shrink-0" />
+                                  <span>{delWin.badgeText}</span>
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })()}
                       </td>
                     </tr>
                   );
@@ -1010,10 +1362,10 @@ export default function ProjectsTab() {
                       required={modalMode === 'CREATE'}
                       className="w-full px-3.5 py-2.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-medium"
                     >
-                      <option value="">-- Choose Approved Customer Purchase Order --</option>
+                      <option value="">-- Choose OA-Approved Customer Purchase Order --</option>
                       {availablePos.map((po: any) => (
                         <option key={po._id || po.id} value={po._id || po.id}>
-                          {po.poNumber} • {po.companyName || po.customerName} • ({po.items?.[0]?.modelCode || 'Machine'}) • {po.deliveryCommitmentDate ? `Commitment: ${formatDate(po.deliveryCommitmentDate)}` : ''}
+                          {po.poNumber} {po.orderAcceptanceNumber ? `(OA: ${po.orderAcceptanceNumber})` : ''} • {po.companyName || po.customerName} • ({po.items?.[0]?.modelCode || 'Machine'}) {po.deliveryCommitmentDate ? `• Commitment: ${formatDate(po.deliveryCommitmentDate)}` : ''}
                         </option>
                       ))}
                     </select>
@@ -1021,8 +1373,8 @@ export default function ProjectsTab() {
                 )}
               </div>
 
-              {/* Section 2: Work Order, Project ID & Commitment Timeline */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+              {/* Section 2: Work Order & Commitment Timeline */}
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <div>
                   <label className="block text-xs font-bold text-slate-800 mb-1.5">
                     Work Order Number *
@@ -1031,22 +1383,27 @@ export default function ProjectsTab() {
                     type="text"
                     required
                     value={workOrderNumber}
-                    onChange={(e) => setWorkOrderNumber(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono font-bold text-orange-600"
+                    onChange={(e) => {
+                      const val = e.target.value.toUpperCase();
+                      setWorkOrderNumber(val);
+                      setProjectId(val);
+                    }}
+                    placeholder="e.g. WO-2026-1001"
+                    className={`w-full px-3.5 py-2.5 text-xs rounded-xl focus:outline-none font-mono font-bold transition-all ${
+                      duplicateWorkOrderProject
+                        ? 'bg-red-50/60 border border-red-400 text-red-700 focus:ring-2 focus:ring-red-500/20 focus:border-red-500'
+                        : 'bg-slate-50 border border-slate-200 text-orange-600 focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500'
+                    }`}
                   />
-                </div>
-
-                <div>
-                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
-                    Project ID *
-                  </label>
-                  <input
-                    type="text"
-                    required
-                    value={projectId}
-                    onChange={(e) => setProjectId(e.target.value)}
-                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-mono font-bold text-slate-800"
-                  />
+                  {duplicateWorkOrderProject && (
+                    <p className="mt-1.5 text-[11px] font-semibold text-red-600 flex items-center gap-1">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" />
+                      <span>
+                        Work Order <strong className="font-mono">{workOrderNumber.trim().toUpperCase()}</strong> is already used by{' '}
+                        <strong>{duplicateWorkOrderProject.customerName}</strong>. Please enter a unique number.
+                      </span>
+                    </p>
+                  )}
                 </div>
 
                 <div>
@@ -1128,6 +1485,35 @@ export default function ProjectsTab() {
                 </div>
               </div>
 
+              {/* Section 3B: Work Order Sheet Metadata (Cost Center & Tech Spec) */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                    Cost Center
+                  </label>
+                  <input
+                    type="text"
+                    value={costCenter}
+                    onChange={(e) => setCostCenter(e.target.value)}
+                    placeholder="Modification"
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-semibold"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-bold text-slate-800 mb-1.5">
+                    Tech Spec
+                  </label>
+                  <input
+                    type="text"
+                    value={techSpec}
+                    onChange={(e) => setTechSpec(e.target.value)}
+                    placeholder="NA"
+                    className="w-full px-3.5 py-2.5 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:bg-white focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-semibold"
+                  />
+                </div>
+              </div>
+
               {/* Section 4: Full Product Technical Description */}
               <div>
                 <label className="block text-xs font-bold text-slate-800 mb-1.5">
@@ -1202,7 +1588,7 @@ export default function ProjectsTab() {
                       >
                         <div className="grid grid-cols-1 sm:grid-cols-12 gap-3 items-center">
                           {/* Stage Number & Title / Dropdown */}
-                          <div className="sm:col-span-5 flex items-center gap-2.5">
+                          <div className="sm:col-span-7 flex items-center gap-2.5">
                             <span className="w-6 h-6 rounded-full bg-orange-100 text-orange-700 font-bold text-xs flex items-center justify-center shrink-0">
                               {idx + 1}
                             </span>
@@ -1234,7 +1620,7 @@ export default function ProjectsTab() {
                                   <option value={st.stageCode}>{st.title || st.stageCode}</option>
                                   {stageMasters.map((sm: any) => (
                                     <option key={sm.stageCode} value={sm.stageCode}>
-                                      {sm.stageName}
+                                      {sm.stageName} ({sm.stageCode})
                                     </option>
                                   ))}
                                 </select>
@@ -1242,27 +1628,8 @@ export default function ProjectsTab() {
                             </div>
                           </div>
 
-                          {/* Lead Role */}
-                          <div className="sm:col-span-3">
-                            <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-                              Lead Role
-                            </label>
-                            <input
-                              type="text"
-                              value={st.leadRole}
-                              onChange={(e) => {
-                                const val = e.target.value;
-                                setConfiguredStages((prev) =>
-                                  prev.map((s, i) => (i === idx ? { ...s, leadRole: val } : s))
-                                );
-                              }}
-                              placeholder="e.g. Lead Engineer"
-                              className="w-full px-3 py-1.5 text-xs bg-white border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
-                            />
-                          </div>
-
                           {/* Target Date */}
-                          <div className="sm:col-span-3">
+                          <div className="sm:col-span-4">
                             <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
                               Target Date *
                             </label>
@@ -1325,8 +1692,8 @@ export default function ProjectsTab() {
                 </button>
                 <button
                   type="submit"
-                  disabled={isCreating || isUpdating}
-                  className="px-6 py-2.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 rounded-xl shadow-xs shadow-orange-500/20 transition-all flex items-center gap-2 disabled:opacity-50"
+                  disabled={isCreating || isUpdating || Boolean(duplicateWorkOrderProject)}
+                  className="px-6 py-2.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 rounded-xl shadow-xs shadow-orange-500/20 transition-all flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   <Cpu className="w-3.5 h-3.5" />
                   <span>
@@ -1358,9 +1725,6 @@ export default function ProjectsTab() {
                     <h3 className="text-slate-900 text-base font-extrabold tracking-tight">
                       {previewProject.workOrderNumber} — {previewProject.customerName}
                     </h3>
-                    <span className="font-mono text-xs font-bold px-2 py-0.5 rounded-lg bg-orange-100 text-orange-700">
-                      {previewProject.projectId}
-                    </span>
                   </div>
                   <p className="text-[11px] text-slate-500 font-medium">
                     {previewProject.machineModel}
@@ -1369,32 +1733,93 @@ export default function ProjectsTab() {
               </div>
 
               <div className="flex items-center gap-2">
-                {/* Edit from Dossier */}
+                {/* Approve from Dossier (when status === 'CREATED') */}
+                {previewProject.status === 'CREATED' && (
+                  <button
+                    type="button"
+                    disabled={isApproving}
+                    onClick={() => handleApproveProject(previewProject)}
+                    className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition-all cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5" />
+                    <span>{isApproving ? 'Approving...' : 'Approve Work Order'}</span>
+                  </button>
+                )}
+
+                {/* Work Order PDF Sheet from Dossier */}
                 <button
                   type="button"
-                  onClick={() => {
-                    const p = previewProject;
-                    setPreviewProject(null);
-                    handleOpenEditModal(p);
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl shadow-xs transition-all"
+                  onClick={() => setWoPdfProject(previewProject)}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-orange-700 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-xl shadow-xs transition-all cursor-pointer"
                 >
-                  <Edit2 className="w-3.5 h-3.5" />
-                  <span>Edit Project</span>
+                  <Printer className="w-3.5 h-3.5" />
+                  <span>Work Order PDF</span>
                 </button>
 
-                {/* Delete from Dossier */}
-                <button
-                  type="button"
-                  onClick={() => {
-                    const p = previewProject;
-                    setDeleteConfirm({ isOpen: true, project: p });
-                  }}
-                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-red-600 bg-red-50 hover:bg-red-100 rounded-xl transition-all border border-red-200"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                  <span>Delete</span>
-                </button>
+                {/* Edit from Dossier (with live countdown) */}
+                {(() => {
+                  const editWin = checkProjectTimeWindow(previewProject, 'EDIT');
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const p = previewProject;
+                        if (!editWin.allowed) {
+                          dispatch(
+                            addToast({
+                              type: 'warning',
+                              title: 'Edit Window Expired',
+                              message: editWin.message
+                            })
+                          );
+                          return;
+                        }
+                        setPreviewProject(null);
+                        handleOpenEditModal(p);
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl shadow-xs transition-all ${
+                        editWin.allowed
+                          ? 'text-white bg-orange-500 hover:bg-orange-600 cursor-pointer'
+                          : 'text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed'
+                      }`}
+                    >
+                      <Edit2 className="w-3.5 h-3.5" />
+                      <span>Edit ({editWin.shortCountdown})</span>
+                    </button>
+                  );
+                })()}
+
+                {/* Delete from Dossier (with live countdown) */}
+                {(() => {
+                  const delWin = checkProjectTimeWindow(previewProject, 'DELETE');
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const p = previewProject;
+                        if (!delWin.allowed) {
+                          dispatch(
+                            addToast({
+                              type: 'warning',
+                              title: 'Delete Window Expired',
+                              message: delWin.message
+                            })
+                          );
+                          return;
+                        }
+                        setDeleteConfirm({ isOpen: true, project: p });
+                      }}
+                      className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all border ${
+                        delWin.allowed
+                          ? 'text-red-600 bg-red-50 hover:bg-red-100 border-red-200 cursor-pointer'
+                          : 'text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed'
+                      }`}
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                      <span>Delete ({delWin.shortCountdown})</span>
+                    </button>
+                  );
+                })()}
 
                 {/* Kanban from Dossier */}
                 <button
@@ -1486,20 +1911,41 @@ export default function ProjectsTab() {
                           </span>
                         </div>
                         <div className="flex justify-between py-1 border-b border-slate-200/60">
-                          <span className="text-slate-500">Project ID:</span>
-                          <span className="font-mono font-bold text-slate-800">
-                            {previewProject.projectId}
-                          </span>
-                        </div>
-                        <div className="flex justify-between py-1 border-b border-slate-200/60">
                           <span className="text-slate-500">Customer PO Number:</span>
                           <span className="font-mono font-semibold text-slate-900">
                             {previewProject.customerPoNumber || previewProject.customerPoRef?.poNumber || 'Direct Minting'}
                           </span>
                         </div>
-                        <div className="flex justify-between py-1">
+                        <div className="flex justify-between py-1 border-b border-slate-200/60">
                           <span className="text-slate-500">Customer Name:</span>
                           <span className="font-bold text-slate-900">{previewProject.customerName}</span>
+                        </div>
+                        <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
+                          <span className="text-slate-500">Work Order Status:</span>
+                          {(() => {
+                            const meta = getWorkOrderStatusMeta(previewProject.status);
+                            return (
+                              <span
+                                className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${meta.className}`}
+                              >
+                                {meta.label}
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        <div className="flex justify-between py-1">
+                          <span className="text-slate-500">Approval Status:</span>
+                          <span className="font-semibold text-slate-800">
+                            {previewProject.status === 'CREATED'
+                              ? 'Pending Approver Sign-Off'
+                              : previewProject.approvedByName
+                              ? `${previewProject.approvedByName}${
+                                  previewProject.approvedAt
+                                    ? ` (${formatDateTime(previewProject.approvedAt)})`
+                                    : ''
+                                }`
+                              : 'Approved'}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1534,11 +1980,51 @@ export default function ProjectsTab() {
                             {formatCurrency(previewProject.contractValue?.amount || 0)}
                           </span>
                         </div>
-                        <div className="flex justify-between py-1">
+                        <div className="flex justify-between py-1 border-b border-slate-200/60">
                           <span className="text-slate-500">Current Stage:</span>
                           <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-200 text-slate-800 uppercase">
                             {previewProject.currentStage?.replace(/_/g, ' ')}
                           </span>
+                        </div>
+                        <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
+                          <span className="text-slate-500">Edit Time Countdown:</span>
+                          {(() => {
+                            const editWin = checkProjectTimeWindow(previewProject, 'EDIT');
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+                                  !editWin.allowed
+                                    ? 'bg-red-50 text-red-600 border-red-200'
+                                    : editWin.mode === 'LIMITED'
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                }`}
+                              >
+                                <Clock className="w-3 h-3" />
+                                <span>{editWin.countdownText}</span>
+                              </span>
+                            );
+                          })()}
+                        </div>
+                        <div className="flex justify-between items-center py-1">
+                          <span className="text-slate-500">Delete Time Countdown:</span>
+                          {(() => {
+                            const delWin = checkProjectTimeWindow(previewProject, 'DELETE');
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
+                                  !delWin.allowed
+                                    ? 'bg-red-50 text-red-600 border-red-200'
+                                    : delWin.mode === 'LIMITED'
+                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
+                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                                }`}
+                              >
+                                <Clock className="w-3 h-3" />
+                                <span>{delWin.countdownText}</span>
+                              </span>
+                            );
+                          })()}
                         </div>
                       </div>
                     </div>
@@ -1795,6 +2281,425 @@ export default function ProjectsTab() {
                   )}
                 </div>
               )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Official Work Order PDF Sheet Modal (With Target Dates & Approval) */}
+      {woPdfProject && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 backdrop-blur-xs p-4 overflow-y-auto">
+          <div className="bg-white rounded-2xl shadow-2xl border border-slate-200 w-full max-w-6xl xl:max-w-7xl max-h-[92vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-150 my-auto">
+            {/* Crisp White Modal Header Ribbon with Amber/Yellow Top Accent Stripe */}
+            <div className="bg-white border-b border-slate-200 border-t-4 border-t-amber-400 px-6 py-4 flex items-center justify-between shrink-0 shadow-xs">
+              <div className="flex items-center gap-3">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/15 text-amber-700 border border-amber-300/40 flex items-center justify-center shrink-0">
+                  <Printer className="w-4 h-4 text-amber-700" />
+                </div>
+                <div className="flex items-center gap-2.5">
+                  <h3 className="text-slate-900 text-base font-extrabold tracking-tight">
+                    Work Order Sheet — {woPdfProject.workOrderNumber}
+                  </h3>
+                  {(() => {
+                    const meta = getWorkOrderStatusMeta(woPdfProject.status);
+                    return (
+                      <span
+                        className={`px-2.5 py-0.5 rounded-full text-[10px] font-bold ${meta.className}`}
+                      >
+                        {meta.label}
+                      </span>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              <div className="flex items-center gap-2">
+                {woPdfProject.status === 'CREATED' && (
+                  <button
+                    type="button"
+                    disabled={isApproving}
+                    onClick={() => handleApproveProject(woPdfProject)}
+                    className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-xl shadow-xs transition-all cursor-pointer"
+                  >
+                    <CheckCircle2 className="w-4 h-4" />
+                    <span>{isApproving ? 'Approving...' : 'Approve Work Order'}</span>
+                  </button>
+                )}
+
+                <button
+                  type="button"
+                  onClick={handlePrintWorkOrderPdf}
+                  className="flex items-center gap-1.5 px-4 py-2 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 active:bg-orange-700 rounded-xl shadow-xs shadow-orange-500/20 transition-all cursor-pointer"
+                >
+                  <Download className="w-4 h-4" />
+                  <span>Download / Print Work Order PDF</span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => setWoPdfProject(null)}
+                  className="text-slate-400 hover:text-slate-800 hover:bg-slate-100 p-1.5 rounded-xl transition-colors"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+            </div>
+
+            {/* Scrollable Preview Area Containing Printable A4 Document */}
+            <div className="p-4 sm:p-6 bg-slate-100 overflow-y-auto flex-1">
+              <div
+                id="wo-printable-document"
+                className="bg-white border border-slate-900 max-w-4xl mx-auto shadow-sm font-serif text-slate-950 flex flex-col justify-between min-h-[1040px]"
+              >
+                <div>
+                  {/* 1. Official Machine House Corporate Nameplate Header */}
+                  <div className="px-6 py-3 bg-white flex items-center justify-start">
+                    <img
+                      src="/branding/mh_logo_plate.png"
+                      alt="Machine House Winding Technologies"
+                      className="h-16 w-auto object-contain"
+                    />
+                  </div>
+
+                  {/* 2. Full-Width Orange "Work Order" Banner */}
+                  <div className="bg-[#F59223] border-y border-slate-900 py-1 text-center">
+                    <h2 className="text-base font-bold text-slate-950 tracking-wide">
+                      Work Order
+                    </h2>
+                  </div>
+
+                  {/* 3. Main Sheet Content Area */}
+                  <div className="px-6 pt-4 pb-2 space-y-4">
+                    {/* Upper 5-Column Metadata Block */}
+                    <table className="w-full border-collapse border border-slate-900 text-xs text-slate-950">
+                      <tbody>
+                        <tr>
+                          <td className="w-[24%] border border-slate-900 px-2.5 py-1.5 text-right font-normal">
+                            Purchase Order Number
+                          </td>
+                          <td className="w-[22%] border border-slate-900 px-2.5 py-1.5 text-center font-normal">
+                            {woPdfProject.customerPoNumber ||
+                              woPdfProject.customerPoRef?.poNumber ||
+                              'Direct Order'}
+                          </td>
+                          <td className="w-[18%] border border-slate-900 px-2.5 py-1.5 text-center font-normal">
+                            Cost Center
+                          </td>
+                          <td
+                            colSpan={2}
+                            className="w-[36%] border border-slate-900 px-2.5 py-1.5 text-center font-normal text-sm"
+                          >
+                            {woPdfProject.costCenter ||
+                              woPdfProject.contractValue?.costCenter ||
+                              'Modification'}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="border border-slate-900 px-2.5 py-1.5 text-right font-normal">
+                            Purchase Order Receipt Date
+                          </td>
+                          <td className="border border-slate-900 px-2.5 py-1.5 text-center font-normal">
+                            {formatWoSheetDate(woPdfProject.poReceiptDate)}
+                          </td>
+                          <td className="border border-slate-900 px-2.5 py-1.5 text-center"></td>
+                          <td className="w-[21%] border border-slate-900 px-2.5 py-1.5 text-center font-normal">
+                            Name
+                          </td>
+                          <td className="w-[15%] border border-slate-900 px-2.5 py-1.5 text-center font-normal">
+                            Signature
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="border border-slate-900 px-2.5 py-2.5 text-right font-normal">
+                            Work Order Number
+                          </td>
+                          <td className="border border-slate-900 px-2.5 py-2.5 text-center font-normal">
+                            {woPdfProject.workOrderNumber}
+                          </td>
+                          <td className="border border-slate-900 px-2.5 py-2.5 text-center font-normal">
+                            Prepared by
+                          </td>
+                          <td className="border border-slate-900 px-2.5 py-2.5 text-center font-normal text-sm">
+                            {woPdfProject.createdByName || 'Project Lead'}
+                          </td>
+                          <td className="border border-slate-900 px-2.5 py-2.5 text-center text-[10px] italic text-slate-600">
+                            {woPdfProject.createdByName ? 'Signed' : ''}
+                          </td>
+                        </tr>
+                        <tr>
+                          <td className="border border-slate-900 px-2.5 py-2.5 text-right font-normal">
+                            Work Order Released Date
+                          </td>
+                          <td className="border border-slate-900 px-2.5 py-2.5 text-center font-normal">
+                            {formatWoSheetDate(
+                              woPdfProject.approvedAt ||
+                                woPdfProject.startDate ||
+                                woPdfProject.createdAt
+                            )}
+                          </td>
+                          <td className="border border-slate-900 px-2.5 py-2.5 text-center font-normal">
+                            Approved by
+                          </td>
+                          <td className="border border-slate-900 px-2.5 py-2.5 text-center font-normal">
+                            {woPdfProject.status === 'CREATED'
+                              ? 'Pending Approval'
+                              : woPdfProject.approvedByName ||
+                                woPdfProject.createdByName ||
+                                'Approved'}
+                          </td>
+                          <td className="border border-slate-900 px-2.5 py-2.5 text-center text-[10px] font-semibold text-emerald-700">
+                            {woPdfProject.status !== 'CREATED' ? 'Approved' : ''}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {/* Tech Spec & Project Row */}
+                    <table className="w-full border-collapse border border-slate-900 text-xs text-slate-950">
+                      <tbody>
+                        <tr>
+                          <td className="w-[13%] border border-slate-900 px-2.5 py-1.5 text-center font-normal">
+                            Tech Spec
+                          </td>
+                          <td className="w-[26%] border border-slate-900 px-2.5 py-1.5 text-center font-normal text-sm">
+                            {woPdfProject.techSpec ||
+                              woPdfProject.contractValue?.techSpec ||
+                              'NA'}
+                          </td>
+                          <td className="w-[13%] border border-slate-900 px-2.5 py-1.5 text-right font-normal">
+                            Project
+                          </td>
+                          <td className="w-[48%] border border-slate-900 px-2.5 py-1.5 text-center font-normal">
+                            {woPdfProject.customerName}
+                          </td>
+                        </tr>
+                      </tbody>
+                    </table>
+
+                    {/* Unified Project Timeline + Line Items + Revision Record Details Sheet Block */}
+                    <div className="border border-slate-900">
+                      {/* Dynamic Project Timeline Section (Only stages added to this Work Order) */}
+                      <table className="w-full border-collapse text-xs text-slate-950">
+                        <thead>
+                          <tr>
+                            <th
+                              colSpan={Math.max(
+                                (woPdfProject.milestones || []).length,
+                                1
+                              )}
+                              className="border-b border-slate-900 px-2.5 py-1.5 text-center font-normal"
+                            >
+                              Project Timeline
+                            </th>
+                          </tr>
+                          {(woPdfProject.milestones || []).length > 0 ? (
+                            <tr>
+                              {woPdfProject.milestones.map((m: any, idx: number) => (
+                                <th
+                                  key={m.id || m._id || idx}
+                                  className="border-b border-r last:border-r-0 border-slate-900 px-2 py-2 text-center font-normal align-middle"
+                                >
+                                  {m.title || m.stageCode}
+                                </th>
+                              ))}
+                            </tr>
+                          ) : (
+                            <tr>
+                              <th className="border-b border-slate-900 px-2 py-2 text-center font-normal text-slate-500">
+                                No Department Stages Added
+                              </th>
+                            </tr>
+                          )}
+                        </thead>
+                        <tbody>
+                          {(woPdfProject.milestones || []).length > 0 ? (
+                            <tr>
+                              {woPdfProject.milestones.map((m: any, idx: number) => (
+                                <td
+                                  key={m.id || m._id || idx}
+                                  className="border-b border-r last:border-r-0 border-slate-900 px-2 py-3 text-center font-semibold text-slate-950 h-11 align-middle"
+                                >
+                                  {formatWoSheetDate(m.projectedDate || m.baselineDate) || '—'}
+                                </td>
+                              ))}
+                            </tr>
+                          ) : (
+                            <tr>
+                              <td className="border-b border-slate-900 px-2 py-3 text-center text-slate-400 h-11">
+                                —
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+
+                      {/* Work Order Line Items Table */}
+                      <table className="w-full border-collapse text-xs text-slate-950">
+                        <thead>
+                          <tr>
+                            <th className="w-[8%] border-b border-r border-slate-900 px-2 py-1 text-center font-bold">
+                              Sl. No.
+                            </th>
+                            <th className="w-[18%] border-b border-r border-slate-900 px-2 py-1 text-center font-bold">
+                              PART ID
+                            </th>
+                            <th className="w-[7%] border-b border-r border-slate-900 px-2 py-1 text-center font-bold">
+                              Rev
+                            </th>
+                            <th className="w-[45%] border-b border-r border-slate-900 px-2 py-1 text-center font-bold">
+                              DESCRIPTION
+                            </th>
+                            <th className="w-[11%] border-b border-r border-slate-900 px-2 py-1 text-center font-bold">
+                              Qty
+                            </th>
+                            <th className="w-[11%] border-b border-slate-900 px-2 py-1 text-center font-bold">
+                              Unit
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Array.isArray(woPdfProject.poItems) &&
+                          woPdfProject.poItems.length > 0 ? (
+                            woPdfProject.poItems.map((item: any, idx: number) => (
+                              <tr key={idx}>
+                                <td className="border-b border-r border-slate-900 px-2 py-1.5 text-center">
+                                  {item.slNo || idx + 1}
+                                </td>
+                                <td className="border-b border-r border-slate-900 px-2 py-1.5 text-center">
+                                  {item.partId || item.modelCode || ''}
+                                </td>
+                                <td className="border-b border-r border-slate-900 px-2 py-1.5 text-center">
+                                  {item.rev || ''}
+                                </td>
+                                <td className="border-b border-r border-slate-900 px-2.5 py-1.5 text-center">
+                                  {item.description || woPdfProject.machineModel}
+                                </td>
+                                <td className="border-b border-r border-slate-900 px-2 py-1.5 text-center">
+                                  {item.quantity || 1}
+                                </td>
+                                <td className="border-b border-slate-900 px-2 py-1.5 text-center">
+                                  {item.uom || 'Nos.'}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr>
+                              <td className="border-b border-r border-slate-900 px-2 py-1.5 text-center">
+                                1
+                              </td>
+                              <td className="border-b border-r border-slate-900 px-2 py-1.5 text-center"></td>
+                              <td className="border-b border-r border-slate-900 px-2 py-1.5 text-center"></td>
+                              <td className="border-b border-r border-slate-900 px-2.5 py-1.5 text-center">
+                                {woPdfProject.machineModel}
+                                {woPdfProject.productDescription
+                                  ? ` — ${woPdfProject.productDescription}`
+                                  : ''}
+                              </td>
+                              <td className="border-b border-r border-slate-900 px-2 py-1.5 text-center">
+                                1
+                              </td>
+                              <td className="border-b border-slate-900 px-2 py-1.5 text-center">
+                                Nos.
+                              </td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+
+                      {/* Open Sheet Space Below Items (Matches Official Format) */}
+                      <div className="h-44 border-b border-slate-900 bg-white"></div>
+
+                      {/* Revision Record Details Table */}
+                      <table className="w-full border-collapse text-xs text-slate-950">
+                        <thead>
+                          <tr>
+                            <th
+                              colSpan={6}
+                              className="border-b border-slate-900 px-2.5 py-1 text-left font-normal"
+                            >
+                              Revision Record Details
+                            </th>
+                          </tr>
+                          <tr>
+                            <th className="w-[8%] border-b border-r border-slate-900 px-2 py-1 text-center font-normal">
+                              Sl. No.
+                            </th>
+                            <th className="w-[44%] border-b border-r border-slate-900 px-2 py-1 text-center font-normal">
+                              Description
+                            </th>
+                            <th className="w-[9%] border-b border-r border-slate-900 px-2 py-1 text-center font-normal">
+                              Qty
+                            </th>
+                            <th className="w-[9%] border-b border-r border-slate-900 px-2 py-1 text-center font-normal">
+                              Unit
+                            </th>
+                            <th className="w-[14%] border-b border-r border-slate-900 px-2 py-1 text-center font-normal">
+                              Date
+                            </th>
+                            <th className="w-[16%] border-b border-slate-900 px-2 py-1 text-center font-normal">
+                              Revised by
+                            </th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {Array.isArray(woPdfProject.revisions) &&
+                          woPdfProject.revisions.length > 0 ? (
+                            woPdfProject.revisions.map((rev: any, rIdx: number) => (
+                              <tr key={rIdx} className="h-7">
+                                <td className="border-t border-r border-slate-900 px-2 py-1 text-center">
+                                  {rev.slNo || rIdx + 1}
+                                </td>
+                                <td className="border-t border-r border-slate-900 px-2 py-1 text-left">
+                                  {rev.description || ''}
+                                </td>
+                                <td className="border-t border-r border-slate-900 px-2 py-1 text-center">
+                                  {rev.qty || ''}
+                                </td>
+                                <td className="border-t border-r border-slate-900 px-2 py-1 text-center">
+                                  {rev.unit || ''}
+                                </td>
+                                <td className="border-t border-r border-slate-900 px-2 py-1 text-center">
+                                  {formatWoSheetDate(rev.date)}
+                                </td>
+                                <td className="border-t border-slate-900 px-2 py-1 text-center">
+                                  {rev.revisedBy || ''}
+                                </td>
+                              </tr>
+                            ))
+                          ) : (
+                            <tr className="h-7">
+                              <td className="border-r border-slate-900 px-2 py-1"></td>
+                              <td className="border-r border-slate-900 px-2 py-1"></td>
+                              <td className="border-r border-slate-900 px-2 py-1"></td>
+                              <td className="border-r border-slate-900 px-2 py-1"></td>
+                              <td className="border-r border-slate-900 px-2 py-1"></td>
+                              <td className="px-2 py-1"></td>
+                            </tr>
+                          )}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                {/* 4. Official Corporate Orange Footer Bar */}
+                <div className="bg-[#F59223] border-t border-slate-900 px-4 py-2 flex items-center justify-between text-[11px] text-slate-950 leading-snug mt-6">
+                  <div>
+                    <p>#3 Muniyappa Building, Hommadevanahalli,</p>
+                    <p>Kempegowda Road, Basavanapura,</p>
+                    <p>Gottigere Post, Bangalore – 560083</p>
+                  </div>
+                  <div className="text-right">
+                    <p>+91 98454 44962</p>
+                    <p className="text-blue-700 underline">
+                      marketing@machinehousetechnologies.com
+                    </p>
+                    <p className="text-blue-700 underline">
+                      www.machinehousewindingtechnologies.com
+                    </p>
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
         </div>

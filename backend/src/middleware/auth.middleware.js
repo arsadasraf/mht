@@ -1,5 +1,6 @@
 import jwt from 'jsonwebtoken';
 import { prisma } from '../config/db.config.js';
+import { enforceIpWhitelist } from './ipWhitelist.middleware.js';
 
 const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -72,7 +73,7 @@ export const authenticate = async (req, res, next) => {
           }
 
           req.user = user;
-          next();
+          return enforceIpWhitelist(req, res, next);
         } catch (dbErr) {
           return res.status(500).json({
             success: false,

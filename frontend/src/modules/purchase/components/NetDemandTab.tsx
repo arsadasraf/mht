@@ -16,6 +16,20 @@ export default function NetDemandTab() {
 
   return (
     <div className="space-y-4">
+      {/* BOM Approval Status Banner */}
+      {data?.approvalStatus === 'PENDING_APPROVAL' && (
+        <div className="bg-amber-500/10 border border-amber-300 rounded-xl p-3 flex items-center gap-2 text-xs text-amber-900 font-semibold">
+          <AlertTriangle size={15} className="text-amber-600 shrink-0" />
+          <span>Notice: Work Order BOM is currently Pending Design Approval. Sourcing actions should await final approval & freeze.</span>
+        </div>
+      )}
+      {data?.isApproved && (
+        <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3 flex items-center gap-2 text-xs text-emerald-800 font-semibold">
+          <CheckCircle2 size={15} className="text-emerald-600 shrink-0" />
+          <span>Verified: BOM is Approved & Permanently Locked with attached engineering drawings.</span>
+        </div>
+      )}
+
       {/* KPI Row */}
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
         <div className="bg-white rounded-xl border border-slate-200 p-3.5 shadow-sm flex items-center justify-between">

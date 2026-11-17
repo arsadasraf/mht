@@ -564,7 +564,7 @@ export default function CrmMastersTab({
                   {
                     key: 'lockCustomerPoOnProjectConverted',
                     title: 'Lock Customer PO After Project Handover',
-                    desc: 'Locks the Customer PO & Order Acceptance once converted into a Master Project ID (PRJ-XXXX).'
+                    desc: 'Locks the Customer PO & Order Acceptance once converted into a Master Work Order (WO-XXXX).'
                   }
                 ].map((policy) => {
                   const checked = Boolean(masters.prefixLockPolicy?.[policy.key]);

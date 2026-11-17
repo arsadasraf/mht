@@ -81,13 +81,17 @@ export const purchaseApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Vendor', 'PurchaseOrder']
     }),
+    getPurchaseConfig: builder.query({
+      query: () => '/purchase/vendors/config',
+      providesTags: ['Vendor', 'PurchaseOrder']
+    }),
     updatePurchaseConfig: builder.mutation({
       query: (body) => ({
         url: '/purchase/vendors/config',
         method: 'PUT',
         body
       }),
-      invalidatesTags: ['Vendor']
+      invalidatesTags: ['Vendor', 'PurchaseOrder']
     }),
     getRfqs: builder.query({
       query: (params) => ({
@@ -133,6 +137,58 @@ export const purchaseApi = apiSlice.injectEndpoints({
         body
       }),
       invalidatesTags: ['PurchaseOrder']
+    }),
+    approvePurchaseOrder: builder.mutation({
+      query: ({ id }) => ({
+        url: `/purchase/orders/${id}/approve`,
+        method: 'PATCH'
+      }),
+      invalidatesTags: ['PurchaseOrder']
+    }),
+    updatePurchaseOrderStatus: builder.mutation({
+      query: ({ id, status }) => ({
+        url: `/purchase/orders/${id}/status`,
+        method: 'PATCH',
+        body: { status }
+      }),
+      invalidatesTags: ['PurchaseOrder']
+    }),
+    addPurchaseOrderComment: builder.mutation({
+      query: ({ id, comment }) => ({
+        url: `/purchase/orders/${id}/comments`,
+        method: 'POST',
+        body: { comment }
+      }),
+      invalidatesTags: ['PurchaseOrder']
+    }),
+    getPurchaseOrderGrnHistory: builder.query({
+      query: (id) => `/purchase/orders/${id}/grn-history`,
+      providesTags: ['PurchaseOrder']
+    }),
+    updatePurchaseOrder: builder.mutation({
+      query: ({ id, ...body }) => ({
+        url: `/purchase/orders/${id}`,
+        method: 'PUT',
+        body
+      }),
+      invalidatesTags: ['PurchaseOrder']
+    }),
+    deletePurchaseOrder: builder.mutation({
+      query: (id) => ({
+        url: `/purchase/orders/${id}`,
+        method: 'DELETE'
+      }),
+      invalidatesTags: ['PurchaseOrder']
+    }),
+    uploadDirectToS3: builder.mutation<
+      { success: boolean; key: string; url?: string; permanentUrl?: string; s3Url?: string; message?: string },
+      { key: string; contentType?: string; base64Data: string; fileData?: string }
+    >({
+      query: (body) => ({
+        url: '/s3/direct-upload',
+        method: 'POST',
+        body
+      })
     })
   })
 });
@@ -140,6 +196,13 @@ export const purchaseApi = apiSlice.injectEndpoints({
 export const {
   useGetPurchaseOrdersQuery,
   useCreatePurchaseOrderMutation,
+  useApprovePurchaseOrderMutation,
+  useUpdatePurchaseOrderStatusMutation,
+  useAddPurchaseOrderCommentMutation,
+  useGetPurchaseOrderGrnHistoryQuery,
+  useLazyGetPurchaseOrderGrnHistoryQuery,
+  useUpdatePurchaseOrderMutation,
+  useDeletePurchaseOrderMutation,
   useCalculateNetDemandQuery,
   useGetVendorsQuery,
   useCreateVendorMutation,
@@ -149,7 +212,9 @@ export const {
   useCreateVendorPriceAgreementMutation,
   useUpdateVendorPriceAgreementMutation,
   useDeleteVendorPriceAgreementMutation,
+  useGetPurchaseConfigQuery,
   useUpdatePurchaseConfigMutation,
+  useUploadDirectToS3Mutation,
   useGetRfqsQuery,
   useGetQuotationsQuery,
   useGetBillsQuery,

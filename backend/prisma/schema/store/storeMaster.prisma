@@ -1,11 +1,8 @@
 model StoreLocationMaster {
   id            String   @id @default(uuid()) @db.Uuid
-  binCode       String   @unique
-  zoneName      String   @default("Zone A")
-  rackNumber    String   @default("R-01")
-  shelfLevel    String   @default("L1")
-  storageType   String   @default("BO") // RM, BO, COMPONENT, SUB_ASSEMBLY, ASSEMBLY, CONSUMABLE
-  capacityInfo  String   @default("500 Kg")
+  locationName  String   @unique
+  locationType  String   @default("Rack") // Rack, Bin, Shelf, Bay, Yard, Floor, Cage, Mezzanine, Staging Area, Quarantine Area, Other
+  description   String   @default("")
   isActive      Boolean  @default(true)
 
   // Universal Action Tracking
@@ -16,7 +13,8 @@ model StoreLocationMaster {
   createdAt     DateTime @default(now())
   updatedAt     DateTime @updatedAt
 
-  @@index([binCode])
+  @@index([locationName])
+  @@index([locationType])
   @@map("store_location_masters")
 }
 
@@ -24,6 +22,8 @@ model StoreConfig {
   id               String   @id @default(uuid()) @db.Uuid
   configKey        String   @unique @default("GLOBAL_STORE_CONFIG")
   prefixLockPolicy Json     @default("{}")
+  companyProfile   Json     @default("{}")
+  timePolicy       Json     @default("{}")
 
   // Universal Action Tracking
   createdById      String?  @db.Uuid

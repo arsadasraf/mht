@@ -13,7 +13,14 @@ export const DEFAULT_PURCHASE_PREFIX_POLICY = {
   poPrefix: 'PO',
   billPrefix: 'PB',
   lockPoAfterApproval: true,
-  requireThreeQuotesAboveThreshold: false
+  requireThreeQuotesAboveThreshold: false,
+  approverUserIds: [],
+  approverUsers: [],
+  requireApprovalBeforePoRelease: true,
+  editTimeLimitMode: 'UNLIMITED',
+  editTimeLimitHours: 0,
+  deleteTimeLimitMode: 'UNLIMITED',
+  deleteTimeLimitHours: 0
 };
 
 export const DEFAULT_VENDORS = [
@@ -111,6 +118,35 @@ export const DEFAULT_PRICE_AGREEMENTS = [
   }
 ];
 
+export const DEFAULT_PURCHASE_COMPANY_PROFILE = {
+  legalEntityName: 'Machine House - Winding Technologies Pvt Ltd',
+  tagline: 'House of Innovations.....',
+  cin: 'U29253PN2015PTC155421',
+  pan: 'AACCM8892K',
+  gstin: '27AACCM8892K1Z8',
+  registeredOffice: 'Plot No. 44, Electronic Zone, MIDC Bhosari, Pune - 411026, Maharashtra, India',
+  unit1Plant: 'Plot No. 12/B, Industrial Sector 7, Chakan Industrial Area, Pune - 410501, Maharashtra, India',
+  billingEmail: 'accounts@machinehouse.in',
+  purchaseEmail: 'purchase@machinehouse.in',
+  phone: '+91 20 2712 4490',
+  bankName: 'HDFC Bank Ltd',
+  bankBranch: 'Bhosari Industrial Branch, Pune',
+  accountNumber: '50200028479218',
+  ifscCode: 'HDFC0001824',
+  authorizedSignatory: 'Arshad Asraf',
+  signatoryDesignation: 'Managing Director & Plant Head',
+  logoUrl: '/branding/mh_logo_plate.png',
+  iconUrl: '/branding/mh_icon.png',
+  standardPoTerms: [
+    '1. Materials must be supplied strictly as per the specifications, drawings, and make mentioned in this Outward PO.',
+    '2. Test certificates (MTR / Mill TC / Guarantee Certificate) must accompany every consignment.',
+    '3. Materials are subject to physical count, store verification, and Incoming Quality Control (IQC) inspection at our plant.',
+    '4. Any rejected or non-conforming goods will be quarantined and returned at vendor cost and risk within 15 days.',
+    '5. Invoices must clearly cite our Outward PO Number, HSN/SAC codes, and vehicle registration numbers.',
+    '6. Payment terms shall apply from the date of final store acceptance (GRN sign-off), not invoice date.'
+  ]
+};
+
 export const ensurePurchaseConfig = async (user = null) => {
   const actorName = getActorName(user);
   let config = await prisma.purchaseConfig.findUnique({
@@ -121,13 +157,7 @@ export const ensurePurchaseConfig = async (user = null) => {
       data: {
         configKey: 'GLOBAL_PURCHASE_CONFIG',
         prefixLockPolicy: DEFAULT_PURCHASE_PREFIX_POLICY,
-        companyProfile: {
-          legalEntityName: 'Machine House Technologies',
-          address: '#3 Muniyappa Building, Hommadevanahalli, Kempegowda Road, Basavanapura, Gottigere Post, Bangalore – 560083',
-          gstin: '29AENPR8339C1ZZ',
-          phone: '+91 98454 44962',
-          email: 'marketing@machinehousetechnologies.com'
-        },
+        companyProfile: DEFAULT_PURCHASE_COMPANY_PROFILE,
         createdById: user?.id || null,
         createdByName: actorName,
         updatedById: user?.id || null,
@@ -142,7 +172,7 @@ export const ensurePurchaseConfig = async (user = null) => {
 export const ensureDefaultVendorsAndPrices = ensurePurchaseConfig;
 
 const formatVendor = (v) => ({ ...v, _id: v.id });
-const formatPrice = (p) => ({ ...p, _id: p.id });
+const formatPrice = (p) => ({ ...p, _id: p.id, revisionNumber: p.revisionNumber || '' });
 
 export const getVendors = async (req, res, next) => {
   try {
@@ -188,7 +218,10 @@ export const getVendors = async (req, res, next) => {
         ...DEFAULT_PURCHASE_PREFIX_POLICY,
         ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
       },
-      companyProfile: config.companyProfile
+      companyProfile: {
+        ...DEFAULT_PURCHASE_COMPANY_PROFILE,
+        ...(typeof config.companyProfile === 'object' ? config.companyProfile : {})
+      }
     });
   } catch (error) {
     next(error);
@@ -425,16 +458,21 @@ export const createVendorPriceAgreement = async (req, res, next) => {
     const itemCode = String(body.itemCode || body.itemName).trim();
     const itemName = String(body.itemName || body.itemCode || itemCode).trim();
     const itemType = String(body.itemType || 'RM_BO').toUpperCase();
+    const revisionNumber = String(body.revisionNumber || '').trim();
     const isPreferred = body.isPreferred !== undefined ? Boolean(body.isPreferred) : true;
     const unitPrice = Number(body.unitPrice) || 0;
     const taxRatePercent = Number(body.taxRatePercent) || 18;
     const conversionRatio = body.conversionRatio !== undefined && body.conversionRatio !== null ? Number(body.conversionRatio) : 1;
     const equivalentRate = body.equivalentRate !== undefined && body.equivalentRate !== null ? Number(body.equivalentRate) : (conversionRatio && conversionRatio > 0 ? unitPrice / conversionRatio : unitPrice);
 
-    // If preferred is selected, unset other agreements for this item
+    // If preferred is selected, unset other agreements for this item and matching revision (if applicable)
     if (isPreferred) {
+      const preferredWhere = { itemCode, isActive: true };
+      if (revisionNumber) {
+        preferredWhere.revisionNumber = revisionNumber;
+      }
       await prisma.vendorPriceAgreement.updateMany({
-        where: { itemCode, isActive: true },
+        where: preferredWhere,
         data: { isPreferred: false }
       });
 
@@ -471,6 +509,7 @@ export const createVendorPriceAgreement = async (req, res, next) => {
         effectiveTo: String(body.effectiveTo || '').trim(),
         isPreferred,
         remarks: String(body.remarks || '').trim(),
+        revisionNumber,
         isActive: true,
         createdById: req.user?.id || null,
         createdByName: actorName,
@@ -510,14 +549,19 @@ export const updateVendorPriceAgreement = async (req, res, next) => {
     }
 
     const isPreferred = body.isPreferred !== undefined ? Boolean(body.isPreferred) : existing.isPreferred;
+    const revisionNumber = body.revisionNumber !== undefined ? String(body.revisionNumber).trim() : (existing.revisionNumber || '');
     const unitPrice = body.unitPrice !== undefined ? Number(body.unitPrice) : existing.unitPrice;
     const conversionRatio = body.conversionRatio !== undefined ? Number(body.conversionRatio) : existing.conversionRatio;
     const equivalentRate = body.equivalentRate !== undefined ? Number(body.equivalentRate) : (conversionRatio && conversionRatio > 0 ? unitPrice / conversionRatio : existing.equivalentRate);
 
-    // If preferred is selected, unset other agreements for this item
+    // If preferred is selected, unset other agreements for this item and matching revision
     if (isPreferred && !existing.isPreferred) {
+      const preferredWhere = { itemCode: existing.itemCode, id: { not: id }, isActive: true };
+      if (revisionNumber) {
+        preferredWhere.revisionNumber = revisionNumber;
+      }
       await prisma.vendorPriceAgreement.updateMany({
-        where: { itemCode: existing.itemCode, id: { not: id }, isActive: true },
+        where: preferredWhere,
         data: { isPreferred: false }
       });
     }
@@ -555,6 +599,7 @@ export const updateVendorPriceAgreement = async (req, res, next) => {
         effectiveTo: body.effectiveTo !== undefined ? String(body.effectiveTo).trim() : existing.effectiveTo,
         isPreferred,
         remarks: body.remarks !== undefined ? String(body.remarks).trim() : existing.remarks,
+        revisionNumber,
         isActive: body.isActive !== undefined ? Boolean(body.isActive) : existing.isActive,
         updatedById: req.user?.id || null,
         updatedByName: actorName
@@ -611,6 +656,25 @@ export const deleteVendorPriceAgreement = async (req, res, next) => {
       success: true,
       message: `Price agreement removed successfully.`,
       priceAgreement: formatPrice(updated)
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+export const getPurchaseConfig = async (req, res, next) => {
+  try {
+    const config = await ensurePurchaseConfig(req.user);
+    res.status(200).json({
+      success: true,
+      prefixLockPolicy: {
+        ...DEFAULT_PURCHASE_PREFIX_POLICY,
+        ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
+      },
+      companyProfile: {
+        ...DEFAULT_PURCHASE_COMPANY_PROFILE,
+        ...(typeof config.companyProfile === 'object' ? config.companyProfile : {})
+      }
     });
   } catch (error) {
     next(error);

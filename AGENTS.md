@@ -18,7 +18,7 @@ The entire user interface and user experience across the Landing Page (`/`), ERP
   * **Standardized Form & Modal Sizing Across Devices (Desktop, Laptop, Tablet, Mobile):**
     Across the ENTIRE application, all modals, dialogs, drawers, and creation/edit forms MUST follow strict standard sizing tokens:
     * **Desktop Monitors (≥ 1280px / `xl:` & `2xl:`):**
-      * **Master / Expansive Forms (e.g. Customer Master, BOM Configurator, Product Master, PO Builder):** Standard width `w-full max-w-6xl xl:max-w-7xl` with `max-h-[92vh]`. Spacious multi-column layout (`lg:grid-cols-12` or dual-column), generous whitespace (`p-6` to `p-8`), expansive viewing room, and large touch targets.
+      * **Master / Expansive Forms (e.g. Design Drawing & BOM Configurator, Customer Master, Product Master, PO Builder):** Standard width `w-full max-w-6xl xl:max-w-7xl 2xl:max-w-[1560px]` with `max-h-[94vh]`. Spacious multi-column layout (`lg:grid-cols-12` or dual-column), generous whitespace (`p-6` to `p-8`), expansive viewing room, bottom dropdown clearance (`pb-44` to ensure unclipped popovers), and large touch targets.
       * **Standard Action Forms (e.g. Add User, Role Assignment, Gate Entry, Log Inspection):** Standard width `w-full max-w-3xl lg:max-w-4xl` with `max-h-[90vh]` in a clean 2-column grid (`grid-cols-1 sm:grid-cols-2`).
       * **Compact / Quick Action Forms (e.g. Add Category, Quick Note, Status Update):** Standard width `w-full max-w-lg lg:max-w-xl`.
       * **Confirmation & Alert Dialogs:** Compact standard width `w-full max-w-md` (448px).
@@ -62,7 +62,17 @@ The entire user interface and user experience across the Landing Page (`/`), ERP
       * **Safety Orange Visual Filter State:** When a column filter is actively applied, its header funnel button illuminates in Safety Orange (`bg-orange-500 text-white shadow-xs`) with a filled icon. When sorting alone is applied, it reflects an active slate state.
     * **Clean Plain Headers for Non-Filter Columns (Zero Unneeded Filter Icons):** Columns where filtering is not needed (such as `#` serial row numbers, row action buttons/icons, or purely decorative columns) MUST have clean, plain headers without any filter funnel icon.
     * **Strictly Zero Duplicate Header Titles (Use `ExcelColumnFilter` Alone — Zero Extra `<span>Title</span>` in Filter Headers):** The `<ExcelColumnFilter title="Column Name" ... />` component already encapsulates and renders both the column title text (`title`) and the filter funnel trigger button internally. Therefore, inside any filterable table header cell (`<th className="...">`), you MUST place `<ExcelColumnFilter ... />` directly by itself. Strictly NEVER wrap or prefix it with an extra `<span>Column Name</span>` or outer `<div>` containing the title again (e.g. NEVER do `<div><span>Project ID</span><ExcelColumnFilter title="Project ID" /></div>`). Doing so causes unsightly duplicate column titles on screen. For non-filter columns (such as `#`, row actions, progress bars), render clean plain text headers (e.g. `<th className="...">#</th>`).
+    * **Strictly Zero Clipped or Hidden Filter Popovers (`ExcelColumnFilter` Unclipped Overflow, Right-Edge Alignment & Re-Render Stability):** Across the ENTIRE application, opening any column filter popover MUST NEVER be clipped or hidden by parent table wrappers (`overflow-hidden` or `overflow-x-auto`), even when a table has only 0, 1, or 2 rows. The shared `ExcelColumnFilter` component (`frontend/src/components/ui/ExcelColumnFilter.tsx`) automatically unlocks parent `overflow-hidden` / `overflow-x-auto` containers (or adds bottom clearance when horizontal scrolling is active), auto-detects right-edge viewport proximity (`right-0` / `align="right"` for right-side columns), and locks its draft state initialization to `isOpen` transitions so live parent timers/re-renders never reset or close an open filter popover.
     * **Shared Component Reference:** Always utilize or reference the shared component at `frontend/src/components/ui/ExcelColumnFilter.tsx`.
+  * **Mandatory Universal Keyword-Searchable Filter Dropdown Standard (`SearchableSelect` Across Toolbars, Boards & Gantt Charts):**
+    Across the ENTIRE application, all entity-driven filter dropdowns (such as Work Orders, Projects, Customers, Vendors, Engineers, Items, and Categories) located in module toolbars, Kanban boards, Gantt charts, and analytics headers MUST strictly use universal keyword-searchable dropdown popovers (`SearchableSelect`):
+    * **Strictly Zero Plain Static `<select>` Filters for Business Entities:** Plain static HTML `<select>` elements are strictly prohibited for lists of dynamic business entities where records exceed a few static choices.
+    * **Trigger Pill Specification:** Standard rounded-xl trigger (`border-slate-200 bg-slate-50 hover:bg-white text-xs font-semibold rounded-xl px-3 py-2`) showing selected label, chevron rotation indicator, and active Safety Orange highlight (`bg-orange-50/80 border-orange-300 text-orange-950 shadow-xs`) with a quick-clear (`X`) button that instantly resets the filter to "All".
+    * **Floating Search Popover:** Clicking the trigger opens a floating popover (`w-72 sm:w-80 bg-white rounded-2xl shadow-2xl border border-slate-200 z-50 overflow-hidden`) containing:
+      1. **Live Keyword Search Bar:** Autofocused search input with search icon, instant multi-field matching (e.g. code + customer + machine model, or engineer name + email), and clear button.
+      2. **Dual-Line Option Item:** Bold primary identifier (e.g. `WO-2026-0001`) with crisp secondary metadata (e.g. `Tata Steel • Flyer Winder`), hover styling (`hover:bg-slate-100/80`), and active checkmark (`Check` in Safety Orange).
+      3. **Click-Outside & Escape Dismissal:** Automatically dismisses when clicking outside or pressing Escape without losing current state.
+    * **Shared Component Reference:** Always utilize or reference the shared component at `frontend/src/components/ui/SearchableSelect.tsx`.
   * **Mandatory Clickable Row Preview & Complete Audit Trail Standard:**
     Across the ENTIRE application, every data table MUST support an interactive **Clickable Row Preview**:
     * **Clickable Row Identifier:** Clicking on the primary entity identifier (e.g. Raw Material Name, Customer Name, Item Code, Work Order ID) or clicking an eye/preview action button (`Eye` icon) MUST open a high-density, informative **Preview Dossier / Modal**.
@@ -141,6 +151,22 @@ The entire user interface and user experience across the Landing Page (`/`), ERP
    * **Strict File Sanitation:** MIME-type & extension whitelisting (.step, .dwg, .dxf, .pdf, .xlsx, images) with strict rejection of executable/script extensions.
    * **Dual Currency & Locked Exchange Rates:** Base operating currency is INR (₹) with Indian numbering format (`en-IN`: Lakhs/Crores). CRM quotes and POs support foreign currencies (USD, EUR, GBP, JPY), storing `{ currency, amount, exchangeRate, baseAmountINR }` with the conversion rate permanently locked upon record creation.
    * **Dual Unit (Alternate UOM) Mathematical Normalization:** Materials supporting secondary units (e.g. Kg vs Meters, Boxes vs Pcs) store `{ baseQty, baseUom, altQty, altUom, conversionRatio }`. Inventory ledgers and BOM net purchase demand calculations normalize strictly to `baseUom`, while discrete units enforce integer constraints.
+   * **Mandatory 4-Layer Duplicate Prevention & Auto-Generated Editable Sequence Standard:**
+     Every auto-generated or editable code, number, or identifier across the entire ERP (including Work Order Numbers `WO-YYYY-XXXX`, Stage Codes `STG-XXX`, Lead/Quotation/PO/OA Numbers, BOM/ECO Numbers, Vendor PO/RFQ Numbers, Gate Entry/GRN/QC/MR/DC Numbers, Trial/Dispatch/Gate Pass/Ticket Numbers, and all Master Item/Customer/Vendor/Category Codes) MUST strictly implement all 4 layers of duplicate prevention:
+     1. **Layer 1 — Collision-Free Max-Sequence Auto-Generation (Zero `count() + 1` Allowed):**
+        * Backend controllers MUST NEVER use `prisma.<model>.count() + 1` to generate sequential numbers (because deleting any earlier record shifts `count` downward and causes duplicate key collisions).
+        * Always use the shared utility `generateUniqueSequenceCode({ model, field, prefix, startSeq, padLength })` in `backend/src/utils/sequenceGenerator.js` (or equivalent max-suffix scanner), which extracts the highest existing numeric suffix (`maxSeq`), computes `Math.max(startSeq, maxSeq + 1)`, and loops `while (existingSet.has(candidate))` until a guaranteed unused code is found.
+        * Prefixes and starting sequences must be sourced from the module's Master Prefix & Numbering Policy while remaining editable by the user in the form.
+     2. **Layer 2 — Explicit Pre-Save Duplicate Validation on Both Create (`POST`) and Edit (`PUT`/`PATCH`):**
+        * Every create and update controller MUST normalize the submitted code (`.trim().toUpperCase()`) and explicitly query the database before saving to verify no other record holds that code (using `id: { not: currentId }` on update).
+        * Never use `.upsert()` in `create*` endpoints where a duplicate code would silently overwrite an existing record; always check for existence first and return a friendly `400` validation message if taken.
+     3. **Layer 3 — Real-Time Live Frontend Duplicate Detection & Submit Lock:**
+        * In frontend creation/edit modals with editable codes/numbers, auto-suggest the next collision-free sequence using a `Set` check loop against loaded records.
+        * As the user types or edits the code field, perform real-time case-insensitive duplicate detection (`useMemo`) against existing records (excluding the current record ID in `EDIT` mode).
+        * When a duplicate is detected, immediately highlight the input border in crimson (`border-red-400 bg-red-50/60`), display a conversational inline warning message below the field naming the conflicting record, and disable the submit button (`disabled={... || Boolean(duplicateRecord)}`).
+     4. **Layer 4 — Database `@unique` Constraint & Friendly `P2002` Error Interceptor:**
+        * Every unique identifier field in `backend/prisma/schema/<module>/<entity>.prisma` MUST carry a PostgreSQL `@unique` constraint.
+        * Register the field's human-readable label in `FRIENDLY_FIELD_NAMES` inside `backend/src/middleware/error.middleware.js` so any concurrent race condition caught by PostgreSQL `P2002` returns a clean, conversational `400` message instead of a raw database error.
 
 ---
 
@@ -153,9 +179,9 @@ All 10 modules reside in the primary sidebar navigation. Each module contains mu
 2. **Module 2: CRM & Enquiry (`/crm`)**
    * Customer enquiry management, lead sheets, standardized bulk Excel import with dry-run validation preview, quotations, and 1-click transition to confirmed project.
 3. **Module 3: Project Setup (`/project-setup`) [Central Spine]**
-   * **Core Rule:** Creates the **Unique Project ID / Master Work Order ID** (`PRJ-XXXX` / `WO-XXXX`).
-   * This Unique ID serves as the single uninterrupted reference spine across the entire machine lifecycle. All subsequent progress across Design, Purchase, Quality, Store, Production & Trial, Dispatch, and After Sales is tracked and linked to this ID.
-   * Project templates, milestone schedule baselines, and revision change logs.
+   * **Core Rule:** Creates the **Unique Master Work Order Number** (`WO-YYYY-XXXX`, configurable via Prefix & Numbering Policy in Masters).
+   * This Work Order Number serves as the single uninterrupted reference spine across the entire machine lifecycle (strictly no separate Project ID). All subsequent progress across Design, Purchase, Quality, Store, Production & Testing, Trials/Inspection & Dispatch, and After Sales is tracked and linked to this Work Order Number.
+   * Department stage masters (with configurable `STG-XXX` prefix and sequence), milestone schedule baselines, and revision change logs.
 4. **Module 4: Design (`/design`)**
    * 3-Level Hierarchical BOM (Machine $\rightarrow$ Sub-Assembly $\rightarrow$ Part Components) cloned per project.
    * AWS S3-backed controlled CAD/drawing distribution.
@@ -170,12 +196,12 @@ All 10 modules reside in the primary sidebar navigation. Each module contains mu
    * Quality Master (Standard inspection checklists, defect codes, tolerance standards, and instrument calibration).
 7. **Module 7: Store (`/store`)**
    * 4-Bucket inventory states: `Ordered`, `In-QC`, `Accepted`, `Issued`.
-   * **Strict Hard Allocation Locking:** QC-accepted materials are hard-locked to the target Unique Project ID; unauthorized diversion to other machines is strictly blocked without Managerial Transfer Approval.
-8. **Module 8: Production & Trial (`/production-trial`)**
+   * **Strict Hard Allocation Locking:** QC-accepted materials are hard-locked to the target Work Order Number; unauthorized diversion to other machines is strictly blocked without Managerial Transfer Approval.
+8. **Module 8: Production & Testing (`/production-trial`)**
    * Configurable assembly workflows (parallel/sequential sub-assemblies).
    * Stage Gate Checks with mandatory role sign-offs.
    * Dry/wet run machine trials, test logs, and snag tracking.
-9. **Module 9: Dispatch (`/dispatch`)**
+9. **Module 9: Trials/Inspection & Dispatch (`/dispatch`)**
    * **Absolute Zero-Snag Block:** 100% of snags (regardless of severity) must be resolved and QC re-inspected before pre-dispatch gate pass can unlock.
    * Packing list generation, shipping dossier, and project closure.
 10. **Module 10: After Sales (`/after-sales`)**

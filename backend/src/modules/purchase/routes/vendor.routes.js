@@ -8,6 +8,7 @@ import {
   createVendorPriceAgreement,
   updateVendorPriceAgreement,
   deleteVendorPriceAgreement,
+  getPurchaseConfig,
   updatePurchaseConfig
 } from '../controllers/vendor.controller.js';
 import { authenticate } from '../../../middleware/auth.middleware.js';
@@ -17,10 +18,9 @@ const router = Router();
 
 router.use(authenticate, authorizeRouteAccess('/purchase/vendors'));
 
-router.get('/', getVendors);
-router.post('/', createVendor);
-router.put('/:id', updateVendor);
-router.delete('/:id', deleteVendor);
+// Master Config Endpoint (MUST be defined before parameterized /:id routes)
+router.get('/config', getPurchaseConfig);
+router.put('/config', updatePurchaseConfig);
 
 // Price Agreement Endpoints
 router.get('/price-agreements', getPriceAgreements);
@@ -29,6 +29,10 @@ router.put('/price-agreements/:id', updateVendorPriceAgreement);
 router.delete('/price-agreements/:id', deleteVendorPriceAgreement);
 router.post('/price-agreement', createVendorPriceAgreement);
 
-router.put('/config', updatePurchaseConfig);
+// Core Vendor Endpoints
+router.get('/', getVendors);
+router.post('/', createVendor);
+router.put('/:id', updateVendor);
+router.delete('/:id', deleteVendor);
 
 export default router;

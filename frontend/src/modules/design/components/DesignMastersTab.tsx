@@ -47,11 +47,15 @@ import {
   ChevronRight,
   FileSpreadsheet,
   ArrowUp,
-  Workflow
+  Workflow,
+  UserPlus,
+  UserMinus,
+  XCircle
 } from 'lucide-react';
 import {
   useGetDesignMastersQuery,
   useGetDesignTeamUsersQuery,
+  useUpdateDesignTeamMembershipMutation,
   useGetDesignCategoriesQuery,
   useCreateDesignCategoryMutation,
   useUpdateDesignCategoryMutation,
@@ -134,6 +138,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
     classification: string[] | null;
     name: string[] | null;
     revision: string[] | null;
+    make: string[] | null;
     category: string[] | null;
     uom: string[] | null;
     hsnCode: string[] | null;
@@ -142,6 +147,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
     classification: null,
     name: null,
     revision: null,
+    make: null,
     category: null,
     uom: null,
     hsnCode: null,
@@ -190,6 +196,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
     categoryName: '',
     revision: 'Rev 1.0',
     description: '',
+    make: '',
     uom: 'NOS',
     hsnCode: '8479',
     photos: [] as string[],
@@ -417,9 +424,33 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
   const [subStageFormError, setSubStageFormError] = useState('');
 
   // 4. Fetch Design Team Users conditionally
-  const { data: teamData, isLoading: isTeamLoading } = useGetDesignTeamUsersQuery(undefined, {
+  const { data: teamData, isLoading: isTeamLoading, refetch: refetchTeamUsers } = useGetDesignTeamUsersQuery(undefined, {
     skip: currentSubTab !== 'team'
   });
+
+  // 4b. Team Membership Mutation
+  const [updateTeamMembership] = useUpdateDesignTeamMembershipMutation();
+  const [togglingUserId, setTogglingUserId] = useState<string | null>(null);
+
+  const handleToggleMembership = async (member: any) => {
+    const nextInTeam = !member.isInTeam;
+    setTogglingUserId(member.id);
+    try {
+      const res: any = await updateTeamMembership({
+        userId: member.id,
+        isInTeam: nextInTeam
+      }).unwrap();
+      showToast(
+        res?.message || (nextInTeam ? `Added ${member.name} to active Design Team.` : `Removed ${member.name} from active Design Team.`),
+        'success'
+      );
+      refetchTeamUsers();
+    } catch (err: any) {
+      showToast(err?.data?.message || err?.message || 'Could not update team membership right now.', 'error');
+    } finally {
+      setTogglingUserId(null);
+    }
+  };
 
   // 5. Policy Mutation
   const [updateDesignConfig, { isLoading: isSavingPolicy }] = useUpdateDesignMasterConfigMutation();
@@ -923,6 +954,17 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
       .sort((a, b) => a.value.localeCompare(b.value));
   }, [fgItems]);
 
+  const distinctFgMakes = useMemo<DistinctValueItem[]>(() => {
+    const map = new Map<string, number>();
+    fgItems.forEach((it: any) => {
+      const val = it.make?.trim() || 'Unspecified';
+      map.set(val, (map.get(val) || 0) + 1);
+    });
+    return Array.from(map.entries())
+      .map(([value, count]) => ({ value, count }))
+      .sort((a, b) => a.value.localeCompare(b.value));
+  }, [fgItems]);
+
   const distinctFgCategories = useMemo<DistinctValueItem[]>(() => {
     const map = new Map<string, number>();
     fgItems.forEach((it: any) => {
@@ -979,6 +1021,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
         (it: any) =>
           it.name?.toLowerCase().includes(q) ||
           it.description?.toLowerCase().includes(q) ||
+          it.make?.toLowerCase().includes(q) ||
           it.categoryName?.toLowerCase().includes(q) ||
           it.revision?.toLowerCase().includes(q) ||
           it.classification?.toLowerCase().includes(q) ||
@@ -996,6 +1039,9 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
     }
     if (fgExcelFilters.revision && fgExcelFilters.revision.length > 0) {
       result = result.filter((it: any) => fgExcelFilters.revision!.includes(it.revision?.trim() || 'Rev 1.0'));
+    }
+    if (fgExcelFilters.make && fgExcelFilters.make.length > 0) {
+      result = result.filter((it: any) => fgExcelFilters.make!.includes(it.make?.trim() || 'Unspecified'));
     }
     if (fgExcelFilters.category && fgExcelFilters.category.length > 0) {
       result = result.filter((it: any) =>
@@ -1050,6 +1096,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
       classification: null,
       name: null,
       revision: null,
+      make: null,
       category: null,
       uom: null,
       hsnCode: null,
@@ -1309,6 +1356,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
       categoryName: defaultCat.name,
       revision: 'Rev 1.0',
       description: '',
+      make: '',
       uom: 'NOS',
       hsnCode: '8479',
       photos: [],
@@ -1337,6 +1385,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
       categoryName: it.categoryName || '',
       revision: it.revision || 'Rev 1.0',
       description: it.description || '',
+      make: it.make || '',
       uom: it.uom || 'NOS',
       hsnCode: it.hsnCode || '8479',
       photos: initialPhotos,
@@ -1373,6 +1422,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
       categoryName: it.categoryName || '',
       revision: nextRev,
       description: it.description || '',
+      make: it.make || '',
       uom: it.uom || 'NOS',
       hsnCode: it.hsnCode || '8479',
       photos: initialPhotos,
@@ -1481,6 +1531,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
         categoryName: fgForm.categoryName,
         revision: fgForm.revision.trim(),
         description: fgForm.description.trim(),
+        make: fgForm.make.trim(),
         uom: fgForm.uom.trim(),
         hsnCode: fgForm.hsnCode.trim(),
         photos: uploadedPhotoUrls,
@@ -1492,7 +1543,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
 
       if (fgModal?.mode === 'CREATE') {
         const res: any = await createFgItem(payload).unwrap();
-        showToast(res?.message || 'All set! FG item created successfully.', 'success');
+        showToast(res?.message || 'All set! Design Drawing created successfully.', 'success');
       } else if (fgModal?.mode === 'REVISION') {
         const res: any = await createFgRevision({
           id: fgModal?.item?.id || fgModal?.item?._id,
@@ -1505,13 +1556,13 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
           id: fgModal?.item?.id || fgModal?.item?._id,
           ...payload
         }).unwrap();
-        showToast(res?.message || 'All set! FG item updated.', 'success');
+        showToast(res?.message || 'All set! Design Drawing updated.', 'success');
       }
 
       setFgModal(null);
       refetchFg();
     } catch (err: any) {
-      setFgFormError(err?.data?.message || err?.message || 'We could not save this FG item right now.');
+      setFgFormError(err?.data?.message || err?.message || 'We could not save this Design Drawing right now.');
     } finally {
       setIsUploadingFgMedia(false);
     }
@@ -2351,15 +2402,10 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
   // Team summary metrics
   const teamMetrics = useMemo(() => {
     const total = teamUsers.length;
+    const activeTeamCount = teamData?.activeTeamCount ?? teamUsers.filter((u: any) => u.isInTeam).length;
     const online = teamUsers.filter((u: any) => u.isOnline).length;
-    const leads = teamUsers.filter(
-      (u: any) =>
-        u.isSuperAdmin ||
-        u.roleSlug === 'design-engineer' ||
-        u.department === 'DESIGN_ENGINEERING'
-    ).length;
-    return { total, online, leads };
-  }, [teamUsers]);
+    return { total, activeTeamCount, online };
+  }, [teamUsers, teamData?.activeTeamCount]);
 
   return (
     <div className="space-y-4">
@@ -2406,7 +2452,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
             )}
           </Link>
 
-          {/* FG Items */}
+          {/* Design Drawing */}
           <Link
             href="/design/masters/fg"
             className={`px-3.5 py-2 rounded-xl text-xs transition-all flex items-center gap-1.5 ${
@@ -2416,7 +2462,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
             }`}
           >
             <Boxes size={14} />
-            <span>FG Items</span>
+            <span>Design Drawing</span>
             {currentSubTab === 'fg' && fgItems.length > 0 && (
               <span className="ml-1 px-1.5 py-0.2 rounded-full text-[10px] font-mono bg-white text-orange-600 font-bold">
                 {fgItems.length}
@@ -2894,7 +2940,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
               <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search FG items by name, classification, revision, category, HSN..."
+                placeholder="Search design drawings by name, classification, revision, category, HSN..."
                 value={fgSearch}
                 onChange={(e) => setFgSearch(e.target.value)}
                 className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs sm:text-sm text-slate-800 placeholder-slate-400 focus:outline-hidden focus:bg-white focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500 font-medium transition-all"
@@ -2934,7 +2980,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                       className="w-full px-3.5 py-2 text-left text-xs font-semibold text-slate-700 hover:bg-slate-50 hover:text-orange-600 flex items-center gap-2 cursor-pointer"
                     >
                       <Download className="w-4 h-4 text-slate-400" />
-                      <span>Export FG Items (Excel)</span>
+                      <span>Export Design Drawings (Excel)</span>
                     </button>
 
                     <button
@@ -2983,7 +3029,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                 className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white text-xs font-bold shadow-xs cursor-pointer transition-all"
               >
                 <Plus size={14} />
-                <span>Add FG Item</span>
+                <span>Add Design Drawing</span>
               </button>
             </div>
           </div>
@@ -3042,6 +3088,20 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
 
                     {/* Non-Filter Header: Description */}
                     <th className="py-3 px-4 min-w-[200px]">Description &amp; Specifications</th>
+
+                    {/* Excel Filter: Make / Brand */}
+                    <th className="py-3 px-4 min-w-[140px]">
+                      <ExcelColumnFilter
+                        title="Make / Brand"
+                        columnKey="make"
+                        distinctValues={distinctFgMakes}
+                        selectedValues={fgExcelFilters.make}
+                        onFilterChange={(selected) => setFgExcelFilters((prev) => ({ ...prev, make: selected }))}
+                        currentSortField={fgSortField}
+                        currentSortDirection={fgSortDirection}
+                        onSortChange={handleFgSortChange}
+                      />
+                    </th>
 
                     {/* Excel Filter: Category */}
                     <th className="py-3 px-4 min-w-[170px]">
@@ -3112,22 +3172,22 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                 <tbody className="divide-y divide-slate-100">
                   {isFgLoading ? (
                     <tr>
-                      <td colSpan={11} className="py-8 text-center text-slate-400">
+                      <td colSpan={12} className="py-8 text-center text-slate-400">
                         Loading Finished Goods Items...
                       </td>
                     </tr>
                   ) : filteredAndSortedFgItems.length === 0 ? (
                     <tr>
-                      <td colSpan={11} className="py-12 text-center">
+                      <td colSpan={12} className="py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-slate-400 space-y-2">
                           <Boxes size={32} className="text-slate-300" />
                           <span className="text-xs font-semibold text-slate-600">
-                            {hasActiveFgFilters ? 'No FG items match your filters' : 'No Finished Goods items found'}
+                            {hasActiveFgFilters ? 'No Design Drawings match your filters' : 'No Design Drawings found'}
                           </span>
                           <span className="text-[11px] text-slate-400">
                             {hasActiveFgFilters
                               ? 'Try clearing column filters or search term'
-                              : 'Click "Add FG Item" to create your first component, sub-assembly, or assembly.'}
+                              : 'Click "Add Design Drawing" to create your first component, sub-assembly, or assembly.'}
                           </span>
                           {hasActiveFgFilters && (
                             <button
@@ -3215,6 +3275,17 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                             </div>
                           </td>
 
+                          {/* Make / Brand */}
+                          <td className="py-3 px-4 font-semibold text-slate-800">
+                            {item.make ? (
+                              <span className="px-2 py-0.5 rounded-md text-[11px] bg-slate-100 border border-slate-200">
+                                {item.make}
+                              </span>
+                            ) : (
+                              <span className="text-slate-300 italic">—</span>
+                            )}
+                          </td>
+
                           {/* Category */}
                           <td className="py-3 px-4">
                             <span className="text-slate-700 font-medium">
@@ -3279,7 +3350,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                                 type="button"
                                 onClick={() => handleOpenEditFg(item)}
                                 className="p-1.5 rounded-lg border border-slate-200 hover:bg-slate-100 text-slate-600 hover:text-slate-900 transition-colors cursor-pointer"
-                                title="Edit FG Item Specifications & BOM"
+                                title="Edit Design Drawing Specifications & BOM"
                               >
                                 <Edit2 size={13} />
                               </button>
@@ -3303,7 +3374,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                                     ? 'border-slate-200 hover:bg-red-50 text-slate-400 hover:text-red-600'
                                     : 'border-emerald-200 hover:bg-emerald-50 text-emerald-600'
                                 }`}
-                                title={item.isActive ? 'Deactivate FG Item' : 'Activate FG Item'}
+                                title={item.isActive ? 'Deactivate Design Drawing' : 'Activate Design Drawing'}
                               >
                                 {item.isActive ? <Lock size={13} /> : <CheckCircle2 size={13} />}
                               </button>
@@ -3961,8 +4032,12 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
 
             <div className="flex items-center gap-2">
               <div className="px-3 py-1.5 rounded-xl bg-orange-50 border border-orange-200 text-xs">
-                <span className="text-[10px] font-bold uppercase text-orange-800 mr-1.5">Design Team:</span>
-                <span className="font-mono font-extrabold text-orange-900">{teamMetrics.total}</span>
+                <span className="text-[10px] font-bold uppercase text-orange-800 mr-1.5">In Design Team:</span>
+                <span className="font-mono font-extrabold text-orange-900">{teamMetrics.activeTeamCount}</span>
+              </div>
+              <div className="px-3 py-1.5 rounded-xl bg-slate-100 border border-slate-200 text-xs">
+                <span className="text-[10px] font-bold uppercase text-slate-700 mr-1.5">Design Access Users:</span>
+                <span className="font-mono font-extrabold text-slate-900">{teamMetrics.total}</span>
               </div>
               <div className="px-3 py-1.5 rounded-xl bg-emerald-50 border border-emerald-200 text-xs">
                 <span className="text-[10px] font-bold uppercase text-emerald-800 mr-1.5">Online Now:</span>
@@ -3982,20 +4057,21 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                     <th className="py-3 px-4">Department</th>
                     <th className="py-3 px-4">Contact Email &amp; Phone</th>
                     <th className="py-3 px-4">Plant Works</th>
-                    <th className="py-3 px-4 text-center">Status</th>
-                    <th className="py-3 px-4 text-center">Work Assignment</th>
+                    <th className="py-3 px-4 text-center">Online</th>
+                    <th className="py-3 px-4 text-center">Team Status</th>
+                    <th className="py-3 px-4 text-center">Work Assignment Action</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {isTeamLoading ? (
                     <tr>
-                      <td colSpan={8} className="py-8 text-center text-slate-400">
+                      <td colSpan={9} className="py-8 text-center text-slate-400">
                         Loading Design Team...
                       </td>
                     </tr>
                   ) : filteredTeam.length === 0 ? (
                     <tr>
-                      <td colSpan={8} className="py-12 text-center">
+                      <td colSpan={9} className="py-12 text-center">
                         <div className="flex flex-col items-center justify-center text-slate-400 space-y-2">
                           <Users size={32} className="text-slate-300" />
                           <span className="text-xs font-semibold text-slate-600">No Design Team members found</span>
@@ -4010,6 +4086,8 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                       const initials = `${(member.firstName || member.name || 'D')[0]}${
                         (member.lastName || '')[0] || ''
                       }`.toUpperCase();
+
+                      const isToggling = togglingUserId === member.id;
 
                       return (
                         <tr key={member.id || idx} className="hover:bg-slate-50/70 transition-colors">
@@ -4080,10 +4158,41 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                           </td>
 
                           <td className="py-3.5 px-4 text-center">
-                            <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-xl text-[11px] font-bold bg-orange-50 text-orange-700 border border-orange-200 shadow-xs">
-                              <UserCheck size={12} />
-                              <span>Eligible for Tasks</span>
-                            </span>
+                            {member.isInTeam ? (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-bold bg-emerald-50 text-emerald-700 border border-emerald-200 shadow-xs">
+                                <CheckCircle2 size={12} className="text-emerald-600" />
+                                <span>In Team</span>
+                              </span>
+                            ) : (
+                              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-xl text-[10px] font-semibold bg-slate-100 text-slate-500 border border-slate-200">
+                                <XCircle size={12} className="text-slate-400" />
+                                <span>Not in Team</span>
+                              </span>
+                            )}
+                          </td>
+
+                          <td className="py-3.5 px-4 text-center">
+                            {member.isInTeam ? (
+                              <button
+                                type="button"
+                                disabled={isToggling}
+                                onClick={() => handleToggleMembership(member)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-red-50 hover:bg-red-100 text-red-600 border border-red-200 transition-all active:scale-95 disabled:opacity-50 cursor-pointer"
+                              >
+                                <UserMinus size={13} />
+                                <span>{isToggling ? 'Updating...' : 'Remove from Team'}</span>
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                disabled={isToggling}
+                                onClick={() => handleToggleMembership(member)}
+                                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-bold bg-orange-500 hover:bg-orange-600 active:bg-orange-700 text-white transition-all shadow-xs shadow-orange-500/20 active:scale-95 disabled:opacity-50 cursor-pointer"
+                              >
+                                <UserPlus size={13} />
+                                <span>{isToggling ? 'Updating...' : 'Add to Team'}</span>
+                              </button>
+                            )}
                           </td>
                         </tr>
                       );
@@ -4858,10 +4967,10 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                 <div>
                   <h3 className="text-base font-extrabold tracking-tight text-slate-900">
                     {fgModal.mode === 'CREATE'
-                      ? 'Add New FG Item'
+                      ? 'Add New Design Drawing'
                       : fgModal.mode === 'REVISION'
                       ? `Create New Revision — ${fgForm.name}`
-                      : `Edit FG Item — ${fgForm.name}`}
+                      : `Edit Design Drawing — ${fgForm.name}`}
                   </h3>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="px-2 py-0.5 rounded-md text-[10px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 uppercase font-mono">
@@ -5002,6 +5111,20 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                           value={fgForm.description}
                           onChange={(e) => setFgForm({ ...fgForm, description: e.target.value })}
                           placeholder="e.g. TROLLEY SHAFT MACHINED - CNC turned and precision ground main spindle shaft..."
+                          className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-orange-500"
+                        />
+                      </div>
+
+                      {/* Make / Brand / Manufacturer */}
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-800 mb-1">
+                          Make / Brand / Manufacturer
+                        </label>
+                        <input
+                          type="text"
+                          value={fgForm.make}
+                          onChange={(e) => setFgForm({ ...fgForm, make: e.target.value })}
+                          placeholder="e.g. In-House / Machine House, Siemens, THK, Festo, Misumi"
                           className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs text-slate-900 focus:bg-white focus:border-orange-500"
                         />
                       </div>
@@ -5230,7 +5353,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                               No materials attached to this BOM yet
                             </span>
                             <p className="text-[11px] text-slate-400 max-w-sm">
-                              Attach RM-BO items (raw stocks, bought-out hardware) or FG items (child components and sub-assemblies).
+                              Attach RM-BO items (raw stocks, bought-out hardware) or Design Drawings (child components and sub-assemblies).
                             </p>
                             <button
                               type="button"
@@ -5293,7 +5416,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                                             : 'text-slate-600 hover:text-slate-900'
                                         }`}
                                       >
-                                        FG
+                                        Design Drawing
                                       </button>
                                     </div>
 
@@ -5348,7 +5471,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                                       required
                                     >
                                       <option value="">
-                                        {isRmBo ? '— Select RM & BO Item —' : '— Select Child FG Item —'}
+                                        {isRmBo ? '— Select RM & BO Item —' : '— Select Child Design Drawing —'}
                                       </option>
                                       {isRmBo
                                         ? rmItems.map((r: any) => (
@@ -5443,14 +5566,14 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                     {isUploadingFgMedia
                       ? 'Uploading media to S3...'
                       : isCreatingFg
-                      ? 'Saving FG Item...'
+                      ? 'Saving Design Drawing...'
                       : isCreatingFgRevision
                       ? 'Branching Revision...'
                       : fgModal.mode === 'REVISION'
                       ? 'Create Revision'
                       : fgModal.mode === 'EDIT'
-                      ? 'Update FG Item'
-                      : 'Save FG Item'}
+                      ? 'Update Design Drawing'
+                      : 'Save Design Drawing'}
                   </span>
                 </button>
               </div>
@@ -5482,9 +5605,9 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                     </span>
                   </div>
                   <div className="flex items-center gap-2 mt-0.5 text-[11px] text-slate-500 font-medium">
-                    <span>FG Code: {previewFgItem.code || (previewFgItem.id ? previewFgItem.id.slice(0, 8) : 'FG-001')}</span>
+                    <span>Drawing Code: {previewFgItem.code || (previewFgItem.id ? previewFgItem.id.slice(0, 8) : 'DD-001')}</span>
                     <span>•</span>
-                    <span>Category: {previewFgItem.categoryName || previewFgItem.categoryCode || 'Finished Goods'}</span>
+                    <span>Category: {previewFgItem.categoryName || previewFgItem.categoryCode || 'Design Drawing'}</span>
                   </div>
                 </div>
               </div>
@@ -5603,7 +5726,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
               {activeFgPreviewTab === 'details' && (
                 <div className="space-y-5 animate-in fade-in duration-150">
                   {/* Key Attributes Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
                     <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Classification</span>
                       <span className="text-xs font-bold text-slate-900 block mt-1 uppercase">
@@ -5614,6 +5737,12 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                       <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Revision</span>
                       <span className="text-xs font-bold font-mono text-slate-900 block mt-1">
                         {previewFgItem.revision || 'Rev 1.0'}
+                      </span>
+                    </div>
+                    <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Make / Brand</span>
+                      <span className="text-xs font-bold text-slate-900 block mt-1">
+                        {previewFgItem.make || '—'}
                       </span>
                     </div>
                     <div className="p-3.5 rounded-xl bg-slate-50 border border-slate-200">
@@ -5637,7 +5766,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                       <span>Description &amp; Specifications</span>
                     </span>
                     <p className="text-xs text-slate-700 leading-relaxed whitespace-pre-wrap">
-                      {previewFgItem.description || 'No detailed specifications recorded for this FG item.'}
+                      {previewFgItem.description || 'No detailed specifications recorded for this Design Drawing.'}
                     </p>
                   </div>
 
@@ -5689,7 +5818,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                                           : 'bg-indigo-50 text-indigo-700 border-indigo-200'
                                       }`}
                                     >
-                                      {isRm ? 'RM-BO' : 'FG'}
+                                      {isRm ? 'RM-BO' : 'Design Drawing'}
                                     </span>
                                   </td>
                                   <td className="py-2.5 px-3 font-bold text-slate-900">
@@ -6069,7 +6198,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                             ₹{multiLevelBomData.totalCost.toLocaleString('en-IN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
                           </div>
                           <span className="text-[10px] text-slate-500 font-medium block mt-1">
-                            Per 1 {previewFgItem.uom || 'Nos'} of FG
+                            Per 1 {previewFgItem.uom || 'Nos'} of Design Drawing
                           </span>
                         </div>
 
@@ -6138,7 +6267,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                             <span className="font-bold text-slate-900">₹{multiLevelBomData.rmBoCost.toFixed(2)}</span>
                           </div>
                           <div className="flex justify-between font-mono text-[11px] pt-0.5">
-                            <span className="text-slate-600">FG / Sub-Assy:</span>
+                            <span className="text-slate-600">Design Drawing / Sub-Assy:</span>
                             <span className="font-bold text-slate-900">₹{multiLevelBomData.fgCost.toFixed(2)}</span>
                           </div>
                         </div>
@@ -6380,7 +6509,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
                                   className="inline-flex items-center justify-end gap-1 font-bold text-slate-700 tracking-wider text-[11px] hover:text-slate-900 cursor-pointer ml-auto"
                                   title="Click to sort by total quantity"
                                 >
-                                  <span>Total Qty (1 FG)</span>
+                                  <span>Total Qty (1 Drawing)</span>
                                   <ArrowUp
                                     size={11}
                                     className={`transition-transform ${
@@ -7248,7 +7377,7 @@ export default function DesignMastersTab({ initialSubTab = 'rm-bo' }: DesignMast
         onSuccess={() => {
           refetchFg();
           refetchCategories();
-          showToast('All set! FG items imported successfully.');
+          showToast('All set! Design Drawings imported successfully.');
         }}
       />
     </div>

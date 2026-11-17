@@ -40,6 +40,13 @@ export const designApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['DesignMaster']
     }),
+    getBoms: builder.query({
+      query: (params) => ({
+        url: '/design/bom',
+        params
+      }),
+      providesTags: ['Bom']
+    }),
     getBomByProject: builder.query({
       query: (projectId) => `/design/bom/project/${projectId}`,
       providesTags: ['Bom']
@@ -56,6 +63,37 @@ export const designApi = apiSlice.injectEndpoints({
       query: (body) => ({
         url: '/design/bom/attach-assembly',
         method: 'POST',
+        body
+      }),
+      invalidatesTags: ['Bom', 'Project']
+    }),
+    attachDrawingToProject: builder.mutation({
+      query: (body) => ({
+        url: '/design/bom/attach-drawing',
+        method: 'POST',
+        body
+      }),
+      invalidatesTags: ['Bom', 'Project']
+    }),
+    removeAttachedDrawing: builder.mutation({
+      query: (body) => ({
+        url: '/design/bom/remove-drawing',
+        method: 'POST',
+        body
+      }),
+      invalidatesTags: ['Bom', 'Project']
+    }),
+    approveBom: builder.mutation({
+      query: (projectId) => ({
+        url: `/design/bom/project/${projectId}/approve`,
+        method: 'PATCH'
+      }),
+      invalidatesTags: ['Bom', 'Project']
+    }),
+    rejectBom: builder.mutation({
+      query: ({ projectId, ...body }) => ({
+        url: `/design/bom/project/${projectId}/reject`,
+        method: 'PATCH',
         body
       }),
       invalidatesTags: ['Bom', 'Project']
@@ -93,9 +131,17 @@ export const designApi = apiSlice.injectEndpoints({
       }),
       invalidatesTags: ['Eco']
     }),
-    getDesignTeamUsers: builder.query<{ success: boolean; count: number; users: any[] }, void>({
+    getDesignTeamUsers: builder.query<{ success: boolean; count: number; activeTeamCount: number; users: any[]; activeTeamMembers: any[] }, void>({
       query: () => '/design/masters/team-users',
       providesTags: ['User']
+    }),
+    updateDesignTeamMembership: builder.mutation<any, { userId?: string; isInTeam?: boolean; activeTeamUserIds?: string[] }>({
+      query: (body) => ({
+        url: '/design/masters/team-membership',
+        method: 'PATCH',
+        body
+      }),
+      invalidatesTags: ['User', 'DesignMaster']
     }),
     getDesignCategories: builder.query<{ success: boolean; count: number; categories: any[] }, { itemType?: string; search?: string; isActive?: boolean; includeInactive?: boolean } | void>({
       query: (params) => ({
@@ -285,8 +331,13 @@ export const {
   useDeleteDesignMasterItemMutation,
   useUpdateDesignMasterConfigMutation,
   useGetBomByProjectQuery,
+  useGetBomsQuery,
   useSaveBomMutation,
   useAttachAssemblyToProjectMutation,
+  useAttachDrawingToProjectMutation,
+  useRemoveAttachedDrawingMutation,
+  useApproveBomMutation,
+  useRejectBomMutation,
   useGetDrawingsQuery,
   useRegisterDrawingMutation,
   useGetDrawingViewUrlQuery,
@@ -294,6 +345,7 @@ export const {
   useCreateEcoMutation,
   useApproveEcoMutation,
   useGetDesignTeamUsersQuery,
+  useUpdateDesignTeamMembershipMutation,
   useGetDesignCategoriesQuery,
   useCreateDesignCategoryMutation,
   useUpdateDesignCategoryMutation,

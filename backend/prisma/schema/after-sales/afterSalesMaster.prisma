@@ -1,0 +1,25 @@
+model AfterSalesTeamMember {
+  id             String   @id @default(uuid()) @db.Uuid
+  memberCode     String   @unique
+  fullName       String
+  designation    String
+  email          String   @default("")
+  phone          String   @default("")
+  department     String   @default("AFTER_SALES_SERVICE")
+  skillSpecialty String   @default("Installation & Commissioning")
+  isActive       Boolean  @default(true)
+  notes          String   @default("")
+
+  // Universal Action Tracking
+  createdById    String?  @db.Uuid
+  createdByName  String   @default("")
+  updatedById    String?  @db.Uuid
+  updatedByName  String   @default("")
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@index([memberCode])
+  @@index([designation])
+  @@index([isActive])
+  @@map("after_sales_team_members")
+}

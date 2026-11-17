@@ -1,6 +1,7 @@
 import { prisma } from '../../../config/db.config.js';
 import { logAuditEvent } from '../../../services/audit.service.js';
 import { ensureDefaultVendorsAndPrices, DEFAULT_PURCHASE_PREFIX_POLICY } from './vendor.controller.js';
+import { generateUniqueSequenceCode } from '../../../utils/sequenceGenerator.js';
 
 const getActorName = (user) => {
   if (!user) return 'System';
@@ -35,8 +36,13 @@ export const createRfq = async (req, res, next) => {
       ...DEFAULT_PURCHASE_PREFIX_POLICY,
       ...(typeof config.prefixLockPolicy === 'object' ? config.prefixLockPolicy : {})
     };
-    const count = await prisma.outwardRfq.count();
-    const rfqNumber = `${policy.rfqPrefix || 'RFQ'}-${new Date().getFullYear()}-${String(count + 1).padStart(4, '0')}`;
+    const rfqNumber = await generateUniqueSequenceCode({
+      model: 'outwardRfq',
+      field: 'rfqNumber',
+      prefix: `${policy.rfqPrefix || 'RFQ'}-${new Date().getFullYear()}-`,
+      startSeq: 1,
+      padLength: 4
+    });
     const actorName = getActorName(req.user);
 
     const { title, projectId, submissionDeadline, items = [], vendors = [], notes = '' } = req.body;

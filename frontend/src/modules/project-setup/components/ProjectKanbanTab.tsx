@@ -486,11 +486,15 @@ export default function ProjectKanbanTab() {
                 disabled={isLoadingProjects || projects.length === 0}
                 className="w-full px-3.5 py-2.5 bg-slate-50 border border-slate-200 rounded-xl text-xs font-bold text-slate-900 focus:bg-white focus:border-orange-500 focus:outline-none appearance-none pr-9 cursor-pointer transition-colors"
               >
-                {projects.map((p) => (
-                  <option key={p.projectId} value={p.projectId}>
-                    {p.projectId} — {p.customerName} ({p.machineModel})
-                  </option>
-                ))}
+                {projects.length === 0 ? (
+                  <option value="">No projects available</option>
+                ) : (
+                  projects.map((p) => (
+                    <option key={p.projectId} value={p.projectId}>
+                      {p.workOrderNumber || p.projectId} — {p.customerName} ({p.machineModel})
+                    </option>
+                  ))
+                )}
               </select>
               <ChevronDown
                 size={16}
@@ -504,10 +508,7 @@ export default function ProjectKanbanTab() {
             <div className="border-t sm:border-t-0 sm:border-l border-slate-200 pt-3 sm:pt-0 sm:pl-4 space-y-1">
               <div className="flex flex-wrap items-center gap-2">
                 <span className="font-mono text-xs font-extrabold text-orange-600 bg-orange-50 px-2.5 py-0.5 rounded-lg border border-orange-200">
-                  {selectedProject.projectId}
-                </span>
-                <span className="font-mono text-xs font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded-lg">
-                  {selectedProject.workOrderNumber || 'WO-PENDING'}
+                  {selectedProject.workOrderNumber || selectedProject.projectId}
                 </span>
                 {selectedProject.customerPoNumber && (
                   <span className="text-[11px] font-semibold text-slate-500">
