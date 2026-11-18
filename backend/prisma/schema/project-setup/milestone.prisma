@@ -53,6 +53,7 @@ model ProjectSubStage {
 
   projectId            String
   departmentModule     String    @default("design")
+  productionLine       String    @default("MECHANICAL")
   subStageCode         String
   title                String
   order                Int       @default(1)

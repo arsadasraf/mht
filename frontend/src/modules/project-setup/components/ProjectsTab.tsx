@@ -34,7 +34,9 @@ import {
   Trash2,
   ListPlus,
   Printer,
-  Download
+  Download,
+  IndianRupee,
+  CalendarCheck
 } from 'lucide-react';
 import {
   useGetProjectsQuery,
@@ -290,9 +292,23 @@ export default function ProjectsTab() {
     setSortDirection(direction);
   };
 
-  // Clickable Preview Dossier Modal State (with 3 tabbed views)
+  // Clickable Preview Dossier Modal State (with 4 tabbed views)
   const [previewProject, setPreviewProject] = useState<any | null>(null);
-  const [dossierActiveTab, setDossierActiveTab] = useState<'basic' | 'stages' | 'design-substages'>('basic');
+  const [dossierActiveTab, setDossierActiveTab] = useState<'basic' | 'bom-boq' | 'stages' | 'design-substages'>('basic');
+
+  // Keep previewProject synchronized with latest projects query data (so live BOM & BOQ updates show immediately)
+  useEffect(() => {
+    if (previewProject && projects.length > 0) {
+      const updatedMatch = projects.find(
+        (p: any) =>
+          (p.id && p.id === previewProject.id) ||
+          (p.workOrderNumber && p.workOrderNumber === previewProject.workOrderNumber)
+      );
+      if (updatedMatch && updatedMatch !== previewProject) {
+        setPreviewProject(updatedMatch);
+      }
+    }
+  }, [projects, previewProject]);
 
   // Official Work Order PDF Sheet Modal State
   const [woPdfProject, setWoPdfProject] = useState<any | null>(null);
@@ -946,7 +962,7 @@ export default function ProjectsTab() {
           )}
         </div>
 
-        {/* Right Side: Reset Filters, Kanban & Primary Create Button */}
+        {/* Right Side: Reset Filters & Primary Create Button */}
         <div className="flex items-center gap-2 justify-end">
           {hasActiveFilters && (
             <button
@@ -957,14 +973,6 @@ export default function ProjectsTab() {
               <span>Reset Filters</span>
             </button>
           )}
-
-          <button
-            onClick={() => router.push('/project-setup/kanban')}
-            className="flex items-center gap-1.5 px-3.5 py-2 text-xs font-semibold text-slate-700 bg-white border border-slate-200 hover:bg-slate-50 rounded-xl shadow-xs transition-all"
-          >
-            <Kanban className="w-3.5 h-3.5 text-orange-500" />
-            <span>Kanban Board</span>
-          </button>
 
           <button
             onClick={handleOpenCreateModal}
@@ -1103,16 +1111,32 @@ export default function ProjectsTab() {
 
                       {/* Clickable Work Order Identifier */}
                       <td className="py-3.5 px-4 font-mono font-extrabold text-slate-900 group-hover:text-orange-600 transition-colors">
-                        <div className="flex items-center gap-1.5">
+                        <div className="flex flex-wrap items-center gap-1.5">
                           <span className="px-2 py-0.5 rounded-lg bg-orange-50 border border-orange-200 text-orange-700 text-xs">
                             {row.workOrderNumber}
                           </span>
-                          <WorkOrderBomBadge
-                            isBomLocked={row.isBomLocked}
-                            bomStatus={row.bomStatus}
-                            bomAttached={row.bomAttached}
-                            attachedDrawingsCount={row.attachedDrawingsCount}
-                          />
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setPreviewProject(row);
+                              setDossierActiveTab('bom-boq');
+                            }}
+                            className="inline-flex items-center gap-1 cursor-pointer"
+                            title="Click to inspect attached BOM & BOQ"
+                          >
+                            <WorkOrderBomBadge
+                              isBomLocked={row.isBomLocked}
+                              bomStatus={row.bomStatus}
+                              bomAttached={row.bomAttached}
+                              attachedDrawingsCount={row.attachedDrawingsCount}
+                            />
+                            {row.bomAttached && (
+                              <span className="px-1.5 py-0.5 rounded-md bg-slate-100 border border-slate-200 text-[10px] font-mono font-bold text-slate-700">
+                                {row.bomItems?.length || 0} BOQ
+                              </span>
+                            )}
+                          </button>
                         </div>
                       </td>
 
@@ -1172,105 +1196,91 @@ export default function ProjectsTab() {
                           const editWin = checkProjectTimeWindow(row, 'EDIT');
                           const delWin = checkProjectTimeWindow(row, 'DELETE');
                           return (
-                            <div className="flex flex-col items-center gap-1.5">
-                              <div className="flex items-center justify-center gap-1">
-                                {/* Preview Button */}
-                                <button
-                                  onClick={() => {
-                                    setPreviewProject(row);
-                                    setDossierActiveTab('basic');
-                                  }}
-                                  title="Preview Dossier"
-                                  className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
-                                >
-                                  <Eye className="w-4 h-4" />
-                                </button>
+                            <div className="flex items-center justify-center gap-1">
+                              {/* Costing Dashboard Icon Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  dispatch(setActiveProjectId(row.workOrderNumber || row.projectId));
+                                  router.push('/project-setup/costing');
+                                }}
+                                title="Costing Dashboard"
+                                className="p-1.5 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 rounded-lg transition-colors"
+                              >
+                                <IndianRupee className="w-4 h-4" />
+                              </button>
 
-                                {/* Edit Button */}
-                                <button
-                                  onClick={() => handleOpenEditModal(row)}
-                                  title={
-                                    editWin.allowed
-                                      ? `Edit Work Order (${editWin.countdownText})`
-                                      : editWin.message
-                                  }
-                                  className={`p-1.5 rounded-lg transition-colors ${
-                                    editWin.allowed
-                                      ? 'text-orange-500 hover:text-orange-700 hover:bg-orange-50'
-                                      : 'text-slate-300 cursor-not-allowed'
-                                  }`}
-                                >
-                                  <Edit2 className="w-4 h-4" />
-                                </button>
+                              {/* Kanban Icon Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  dispatch(setActiveProjectId(row.workOrderNumber || row.projectId));
+                                  router.push('/project-setup/kanban');
+                                }}
+                                title="Kanban Board"
+                                className="p-1.5 text-orange-500 hover:text-orange-700 hover:bg-orange-50 rounded-lg transition-colors"
+                              >
+                                <Kanban className="w-4 h-4" />
+                              </button>
 
-                                {/* Delete Button */}
-                                <button
-                                  onClick={() => {
-                                    if (!delWin.allowed) {
-                                      dispatch(
-                                        addToast({
-                                          type: 'warning',
-                                          title: 'Delete Window Expired',
-                                          message: delWin.message
-                                        })
-                                      );
-                                      return;
-                                    }
-                                    setDeleteConfirm({ isOpen: true, project: row });
-                                  }}
-                                  title={
-                                    delWin.allowed
-                                      ? `Delete Work Order (${delWin.countdownText})`
-                                      : delWin.message
-                                  }
-                                  className={`p-1.5 rounded-lg transition-colors ${
-                                    delWin.allowed
-                                      ? 'text-red-500 hover:text-red-700 hover:bg-red-50'
-                                      : 'text-slate-300 cursor-not-allowed'
-                                  }`}
-                                >
-                                  <Trash2 className="w-4 h-4" />
-                                </button>
-                              </div>
+                              {/* Milestones Icon Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  dispatch(setActiveProjectId(row.workOrderNumber || row.projectId));
+                                  router.push('/project-setup/milestones');
+                                }}
+                                title="Milestones"
+                                className="p-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50 rounded-lg transition-colors"
+                              >
+                                <CalendarCheck className="w-4 h-4" />
+                              </button>
 
-                              {/* Live Edit & Delete Countdown Pills */}
-                              <div className="flex items-center justify-center gap-1 flex-wrap">
-                                <span
-                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
-                                    !editWin.allowed
-                                      ? 'bg-red-50 text-red-600 border-red-200'
-                                      : editWin.mode === 'LIMITED'
-                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                      : 'bg-slate-50 text-slate-600 border-slate-200'
-                                  }`}
-                                  title={
-                                    editWin.allowed
-                                      ? `Editable time remaining: ${editWin.countdownText}`
-                                      : editWin.message
-                                  }
-                                >
-                                  <Clock className="w-2.5 h-2.5 shrink-0" />
-                                  <span>{editWin.badgeText}</span>
-                                </span>
+                              {/* Preview Button */}
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setPreviewProject(row);
+                                  setDossierActiveTab('basic');
+                                }}
+                                title="Preview Dossier"
+                                className="p-1.5 text-slate-400 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors"
+                              >
+                                <Eye className="w-4 h-4" />
+                              </button>
 
-                                <span
-                                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
-                                    !delWin.allowed
-                                      ? 'bg-red-50 text-red-600 border-red-200'
-                                      : delWin.mode === 'LIMITED'
-                                      ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                      : 'bg-slate-50 text-slate-600 border-slate-200'
-                                  }`}
-                                  title={
-                                    delWin.allowed
-                                      ? `Deletable time remaining: ${delWin.countdownText}`
-                                      : delWin.message
-                                  }
-                                >
-                                  <Clock className="w-2.5 h-2.5 shrink-0" />
-                                  <span>{delWin.badgeText}</span>
-                                </span>
-                              </div>
+                              {/* Edit Button */}
+                              <button
+                                type="button"
+                                disabled={!editWin.allowed}
+                                onClick={() => handleOpenEditModal(row)}
+                                title={editWin.allowed ? 'Edit Work Order' : editWin.message}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  editWin.allowed
+                                    ? 'text-orange-500 hover:text-orange-700 hover:bg-orange-50 cursor-pointer'
+                                    : 'text-slate-300 opacity-50 cursor-not-allowed'
+                                }`}
+                              >
+                                <Edit2 className="w-4 h-4" />
+                              </button>
+
+                              {/* Delete Button */}
+                              <button
+                                type="button"
+                                disabled={!delWin.allowed}
+                                onClick={() => {
+                                  if (!delWin.allowed) return;
+                                  setDeleteConfirm({ isOpen: true, project: row });
+                                }}
+                                title={delWin.allowed ? 'Delete Work Order' : delWin.message}
+                                className={`p-1.5 rounded-lg transition-colors ${
+                                  delWin.allowed
+                                    ? 'text-red-500 hover:text-red-700 hover:bg-red-50 cursor-pointer'
+                                    : 'text-slate-300 opacity-50 cursor-not-allowed'
+                                }`}
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
                             </div>
                           );
                         })()}
@@ -1756,70 +1766,68 @@ export default function ProjectsTab() {
                   <span>Work Order PDF</span>
                 </button>
 
-                {/* Edit from Dossier (with live countdown) */}
+                {/* Edit from Dossier */}
                 {(() => {
                   const editWin = checkProjectTimeWindow(previewProject, 'EDIT');
                   return (
                     <button
                       type="button"
+                      disabled={!editWin.allowed}
                       onClick={() => {
+                        if (!editWin.allowed) return;
                         const p = previewProject;
-                        if (!editWin.allowed) {
-                          dispatch(
-                            addToast({
-                              type: 'warning',
-                              title: 'Edit Window Expired',
-                              message: editWin.message
-                            })
-                          );
-                          return;
-                        }
                         setPreviewProject(null);
                         handleOpenEditModal(p);
                       }}
+                      title={editWin.allowed ? 'Edit Work Order' : editWin.message}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl shadow-xs transition-all ${
                         editWin.allowed
                           ? 'text-white bg-orange-500 hover:bg-orange-600 cursor-pointer'
-                          : 'text-slate-400 bg-slate-100 border border-slate-200 cursor-not-allowed'
+                          : 'text-slate-300 bg-slate-100 border border-slate-200 opacity-50 cursor-not-allowed'
                       }`}
                     >
                       <Edit2 className="w-3.5 h-3.5" />
-                      <span>Edit ({editWin.shortCountdown})</span>
+                      <span>Edit</span>
                     </button>
                   );
                 })()}
 
-                {/* Delete from Dossier (with live countdown) */}
+                {/* Delete from Dossier */}
                 {(() => {
                   const delWin = checkProjectTimeWindow(previewProject, 'DELETE');
                   return (
                     <button
                       type="button"
+                      disabled={!delWin.allowed}
                       onClick={() => {
-                        const p = previewProject;
-                        if (!delWin.allowed) {
-                          dispatch(
-                            addToast({
-                              type: 'warning',
-                              title: 'Delete Window Expired',
-                              message: delWin.message
-                            })
-                          );
-                          return;
-                        }
-                        setDeleteConfirm({ isOpen: true, project: p });
+                        if (!delWin.allowed) return;
+                        setDeleteConfirm({ isOpen: true, project: previewProject });
                       }}
+                      title={delWin.allowed ? 'Delete Work Order' : delWin.message}
                       className={`flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold rounded-xl transition-all border ${
                         delWin.allowed
                           ? 'text-red-600 bg-red-50 hover:bg-red-100 border-red-200 cursor-pointer'
-                          : 'text-slate-400 bg-slate-100 border-slate-200 cursor-not-allowed'
+                          : 'text-slate-300 bg-slate-100 border-slate-200 opacity-50 cursor-not-allowed'
                       }`}
                     >
                       <Trash2 className="w-3.5 h-3.5" />
-                      <span>Delete ({delWin.shortCountdown})</span>
+                      <span>Delete</span>
                     </button>
                   );
                 })()}
+
+                {/* Costing from Dossier */}
+                <button
+                  type="button"
+                  onClick={() => {
+                    dispatch(setActiveProjectId(previewProject.workOrderNumber || previewProject.projectId));
+                    router.push('/project-setup/costing');
+                  }}
+                  className="flex items-center gap-1.5 px-3 py-1.5 text-xs font-bold text-emerald-700 bg-emerald-50 border border-emerald-200 hover:bg-emerald-100 rounded-xl shadow-xs transition-all"
+                >
+                  <IndianRupee className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Costing</span>
+                </button>
 
                 {/* Kanban from Dossier */}
                 <button
@@ -1844,8 +1852,8 @@ export default function ProjectsTab() {
               </div>
             </div>
 
-            {/* Dossier Navigation: 3 Button-Type Tabs */}
-            <div className="px-6 pt-4 pb-2 bg-slate-50/50 border-b border-slate-200 flex items-center gap-2">
+            {/* Dossier Navigation: 4 Button-Type Tabs */}
+            <div className="px-6 pt-4 pb-2 bg-slate-50/50 border-b border-slate-200 flex flex-wrap items-center gap-2">
               <button
                 type="button"
                 onClick={() => setDossierActiveTab('basic')}
@@ -1857,6 +1865,22 @@ export default function ProjectsTab() {
               >
                 <Briefcase className="w-3.5 h-3.5" />
                 <span>Basic Details & Product</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setDossierActiveTab('bom-boq')}
+                className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all ${
+                  dossierActiveTab === 'bom-boq'
+                    ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
+                    : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                }`}
+              >
+                <FileText className="w-3.5 h-3.5" />
+                <span>BOM & BOQ</span>
+                <span className="px-1.5 py-0.2 rounded-full text-[10px] bg-white/20">
+                  {(previewProject.bomItems?.length || 0) + (previewProject.attachedDrawings?.length || 0)}
+                </span>
               </button>
 
               <button
@@ -1980,51 +2004,11 @@ export default function ProjectsTab() {
                             {formatCurrency(previewProject.contractValue?.amount || 0)}
                           </span>
                         </div>
-                        <div className="flex justify-between py-1 border-b border-slate-200/60">
+                        <div className="flex justify-between py-1">
                           <span className="text-slate-500">Current Stage:</span>
                           <span className="px-2 py-0.5 rounded-lg text-[10px] font-bold bg-slate-200 text-slate-800 uppercase">
                             {previewProject.currentStage?.replace(/_/g, ' ')}
                           </span>
-                        </div>
-                        <div className="flex justify-between items-center py-1 border-b border-slate-200/60">
-                          <span className="text-slate-500">Edit Time Countdown:</span>
-                          {(() => {
-                            const editWin = checkProjectTimeWindow(previewProject, 'EDIT');
-                            return (
-                              <span
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
-                                  !editWin.allowed
-                                    ? 'bg-red-50 text-red-600 border-red-200'
-                                    : editWin.mode === 'LIMITED'
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                }`}
-                              >
-                                <Clock className="w-3 h-3" />
-                                <span>{editWin.countdownText}</span>
-                              </span>
-                            );
-                          })()}
-                        </div>
-                        <div className="flex justify-between items-center py-1">
-                          <span className="text-slate-500">Delete Time Countdown:</span>
-                          {(() => {
-                            const delWin = checkProjectTimeWindow(previewProject, 'DELETE');
-                            return (
-                              <span
-                                className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-md text-[10px] font-mono font-bold border ${
-                                  !delWin.allowed
-                                    ? 'bg-red-50 text-red-600 border-red-200'
-                                    : delWin.mode === 'LIMITED'
-                                    ? 'bg-amber-50 text-amber-700 border-amber-200'
-                                    : 'bg-emerald-50 text-emerald-700 border-emerald-200'
-                                }`}
-                              >
-                                <Clock className="w-3 h-3" />
-                                <span>{delWin.countdownText}</span>
-                              </span>
-                            );
-                          })()}
                         </div>
                       </div>
                     </div>
@@ -2046,6 +2030,77 @@ export default function ProjectsTab() {
                         {previewProject.productDescription || 'No detailed technical specification attached.'}
                       </p>
                     </div>
+                  </div>
+
+                  {/* Attached Engineering BOM & BOQ Summary Card */}
+                  <div className="p-4 bg-slate-50 border border-slate-200 rounded-2xl space-y-3">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                      <div className="flex items-center gap-2">
+                        <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                          Engineering BOM & BOQ Status
+                        </h4>
+                        <WorkOrderBomBadge
+                          isBomLocked={previewProject.isBomLocked}
+                          bomStatus={previewProject.bomStatus}
+                          bomAttached={previewProject.bomAttached}
+                          attachedDrawingsCount={previewProject.attachedDrawingsCount}
+                          size="xs"
+                        />
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => setDossierActiveTab('bom-boq')}
+                          className="px-3 py-1.5 text-xs font-bold text-orange-600 bg-orange-50 hover:bg-orange-100 border border-orange-200 rounded-xl transition-colors"
+                        >
+                          View Full BOM & BOQ ({(previewProject.bomItems?.length || 0) + (previewProject.attachedDrawings?.length || 0)})
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            dispatch(setActiveProjectId(previewProject.workOrderNumber || previewProject.projectId));
+                            router.push('/project-setup/costing');
+                          }}
+                          className="px-3 py-1.5 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl transition-colors"
+                        >
+                          Costing Dashboard
+                        </button>
+                      </div>
+                    </div>
+
+                    {previewProject.bomAttached ? (
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                        <div className="bg-white border border-slate-200 rounded-xl p-3">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">BOM Number</span>
+                          <span className="text-xs font-mono font-bold text-slate-900">
+                            {previewProject.bomNumber || 'Attached'} ({previewProject.bomRevision || 'REV-0'})
+                          </span>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-xl p-3">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Attached Drawings</span>
+                          <span className="text-xs font-extrabold text-sky-700">
+                            {previewProject.attachedDrawings?.length || 0} Drawing(s)
+                          </span>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-xl p-3">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">BOQ Line Items</span>
+                          <span className="text-xs font-extrabold text-slate-900">
+                            {previewProject.bomItems?.length || 0} Item(s)
+                          </span>
+                        </div>
+                        <div className="bg-white border border-slate-200 rounded-xl p-3">
+                          <span className="text-[10px] font-bold text-slate-400 uppercase block">Estimated BOM Cost</span>
+                          <span className="text-xs font-mono font-extrabold text-emerald-700">
+                            {formatCurrency(previewProject.bomSummary?.estimatedTotalCostINR || 0)}
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="bg-white border border-slate-200 rounded-xl p-3 text-xs text-slate-500">
+                        No Design Drawing or BOM & BOQ attached yet. Attach drawings or BOM items in Design & CAD &gt; Projects to populate this Work Order.
+                      </div>
+                    )}
                   </div>
 
                   {/* Mandatory Universal Action Tracking / Dual-Card Audit Section */}
@@ -2084,6 +2139,199 @@ export default function ProjectsTab() {
                         </div>
                       </div>
                     </div>
+                  </div>
+                </div>
+              )}
+
+              {/* Tab 2: BOM & BOQ Details & Attached Drawings */}
+              {dossierActiveTab === 'bom-boq' && (
+                <div className="space-y-5">
+                  {/* Top BOM KPI Strip */}
+                  <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block">BOM Reference</span>
+                      <span className="text-xs font-mono font-extrabold text-slate-900">
+                        {previewProject.bomNumber || 'Not Assigned'}
+                      </span>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Attached Drawings</span>
+                      <span className="text-sm font-black text-sky-700">
+                        {previewProject.attachedDrawings?.length || 0}
+                      </span>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Total BOQ Items</span>
+                      <span className="text-sm font-black text-slate-900">
+                        {previewProject.bomItems?.length || 0}
+                      </span>
+                    </div>
+                    <div className="bg-slate-50 border border-slate-200 rounded-xl p-3">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase block">Make / Buy Split</span>
+                      <span className="text-xs font-extrabold text-slate-800">
+                        {previewProject.bomSummary?.makeCount || 0} Make • {previewProject.bomSummary?.buyCount || 0} Buy
+                      </span>
+                    </div>
+                    <div className="bg-emerald-50 border border-emerald-200 rounded-xl p-3">
+                      <span className="text-[10px] font-bold text-emerald-700 uppercase block">Est. BOM Cost</span>
+                      <span className="text-sm font-mono font-black text-emerald-800">
+                        {formatCurrency(previewProject.bomSummary?.estimatedTotalCostINR || 0)}
+                      </span>
+                    </div>
+                  </div>
+
+                  {/* Attached Design Drawings Table */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                      Attached Design Drawings ({previewProject.attachedDrawings?.length || 0})
+                    </h4>
+                    {(!previewProject.attachedDrawings || previewProject.attachedDrawings.length === 0) ? (
+                      <div className="p-6 text-center bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-500">
+                        No design drawings attached to this Work Order yet.
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
+                                <th className="py-2.5 px-3 w-10 text-center">#</th>
+                                <th className="py-2.5 px-3">Drawing / Assembly Code</th>
+                                <th className="py-2.5 px-3">Description</th>
+                                <th className="py-2.5 px-3">Type</th>
+                                <th className="py-2.5 px-3">Revision</th>
+                                <th className="py-2.5 px-3">Status</th>
+                                <th className="py-2.5 px-3 text-right">Document</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {previewProject.attachedDrawings.map((drw: any, dIdx: number) => {
+                                const pdfLink = drw.primaryPdfUrl || drw.pdfUrl || drw.drawingPdfUrl || '';
+                                return (
+                                  <tr key={drw.id || drw.itemCode || dIdx} className="hover:bg-slate-50">
+                                    <td className="py-2.5 px-3 text-center font-mono text-slate-400">{dIdx + 1}</td>
+                                    <td className="py-2.5 px-3 font-mono font-bold text-orange-600">
+                                      {drw.itemCode || drw.drawingNumber || drw.name}
+                                    </td>
+                                    <td className="py-2.5 px-3 font-semibold text-slate-800">
+                                      {drw.itemName || drw.description || '—'}
+                                    </td>
+                                    <td className="py-2.5 px-3">
+                                      <span className="px-2 py-0.5 rounded-md bg-sky-50 text-sky-700 border border-sky-200 text-[10px] font-bold uppercase">
+                                        {drw.classification || drw.itemType || 'ASSEMBLY'}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 px-3 font-mono text-slate-600">
+                                      {drw.revision || 'Rev 1.0'}
+                                    </td>
+                                    <td className="py-2.5 px-3">
+                                      <span
+                                        className={`px-2 py-0.5 rounded-full text-[10px] font-bold uppercase ${
+                                          drw.approvalStatus === 'APPROVED' || drw.isFrozen
+                                            ? 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                        }`}
+                                      >
+                                        {drw.approvalStatus || 'ATTACHED'}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right">
+                                      {pdfLink ? (
+                                        <a
+                                          href={pdfLink}
+                                          target="_blank"
+                                          rel="noopener noreferrer"
+                                          className="inline-flex items-center gap-1 px-2.5 py-1 rounded-lg bg-orange-50 text-orange-700 hover:bg-orange-100 border border-orange-200 text-[11px] font-bold"
+                                        >
+                                          <FileText className="w-3 h-3" />
+                                          <span>See PDF</span>
+                                        </a>
+                                      ) : (
+                                        <span className="text-slate-400 text-[11px]">No PDF</span>
+                                      )}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* BOM & BOQ Line Items Table */}
+                  <div className="space-y-2">
+                    <h4 className="text-xs font-extrabold text-slate-900 uppercase tracking-wider">
+                      Bill of Materials & BOQ Line Items ({previewProject.bomItems?.length || 0})
+                    </h4>
+                    {(!previewProject.bomItems || previewProject.bomItems.length === 0) ? (
+                      <div className="p-8 text-center bg-slate-50 rounded-2xl border border-slate-200 text-xs text-slate-500">
+                        No BOM & BOQ line items added for this Work Order yet.
+                      </div>
+                    ) : (
+                      <div className="bg-white rounded-2xl border border-slate-200 overflow-hidden">
+                        <div className="overflow-x-auto">
+                          <table className="w-full text-left border-collapse text-xs">
+                            <thead>
+                              <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-bold text-slate-500 uppercase">
+                                <th className="py-2.5 px-3 w-10 text-center">#</th>
+                                <th className="py-2.5 px-3">Item / Part Code</th>
+                                <th className="py-2.5 px-3">Item Description</th>
+                                <th className="py-2.5 px-3">Category / Type</th>
+                                <th className="py-2.5 px-3 text-center">Make/Buy</th>
+                                <th className="py-2.5 px-3 text-right">Qty / Machine</th>
+                                <th className="py-2.5 px-3">UOM</th>
+                                <th className="py-2.5 px-3 text-right">Std Rate</th>
+                                <th className="py-2.5 px-3 text-right">Est. Amount</th>
+                              </tr>
+                            </thead>
+                            <tbody className="divide-y divide-slate-100">
+                              {previewProject.bomItems.map((it: any, iIdx: number) => {
+                                const qty = Number(it.quantityPerMachine || it.baseQty || 1);
+                                const rate = Number(it.standardRateINR || it.rate || 0);
+                                const lineTotal = qty * rate;
+                                return (
+                                  <tr key={it.id || it.itemCode || iIdx} className="hover:bg-slate-50">
+                                    <td className="py-2.5 px-3 text-center font-mono text-slate-400">{iIdx + 1}</td>
+                                    <td className="py-2.5 px-3 font-mono font-bold text-slate-900">
+                                      {it.itemCode || it.drawingNumber || '—'}
+                                    </td>
+                                    <td className="py-2.5 px-3 font-medium text-slate-800">
+                                      {it.itemName || it.description || '—'}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-slate-600">
+                                      {it.category || it.itemType || 'Component'}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-center">
+                                      <span
+                                        className={`px-2 py-0.5 rounded-md text-[10px] font-bold uppercase ${
+                                          String(it.makeOrBuy || '').toUpperCase() === 'MAKE'
+                                            ? 'bg-indigo-50 text-indigo-700 border border-indigo-200'
+                                            : 'bg-amber-50 text-amber-700 border border-amber-200'
+                                        }`}
+                                      >
+                                        {it.makeOrBuy || 'BUY'}
+                                      </span>
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-mono font-bold text-slate-900">
+                                      {qty}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-slate-500">{it.uom || it.baseUom || 'Nos'}</td>
+                                    <td className="py-2.5 px-3 text-right font-mono text-slate-700">
+                                      {rate > 0 ? formatCurrency(rate) : '—'}
+                                    </td>
+                                    <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-700">
+                                      {lineTotal > 0 ? formatCurrency(lineTotal) : '—'}
+                                    </td>
+                                  </tr>
+                                );
+                              })}
+                            </tbody>
+                          </table>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}

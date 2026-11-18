@@ -290,7 +290,7 @@ export default function QualityMasterTab({
             placeholder="Search..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-orange-500"
+            className="w-full pl-9 pr-4 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-orange-500"
           />
         </div>
 
@@ -551,7 +551,7 @@ export default function QualityMasterTab({
                       onChange={(e) =>
                         setChecklistForm({ ...checklistForm, name: e.target.value })
                       }
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-orange-500"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-orange-500"
                       required
                     />
                   </div>
@@ -568,7 +568,7 @@ export default function QualityMasterTab({
                             stage: e.target.value as any
                           })
                         }
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-orange-500"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-orange-500"
                       >
                         <option value="INCOMING">Incoming</option>
                         <option value="IN_PROCESS">In-Process</option>
@@ -622,7 +622,7 @@ export default function QualityMasterTab({
                       onChange={(e) =>
                         setDefectForm({ ...defectForm, title: e.target.value })
                       }
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-orange-500"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-orange-500"
                       required
                     />
                   </div>
@@ -653,7 +653,7 @@ export default function QualityMasterTab({
                             severity: e.target.value as any
                           })
                         }
-                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-orange-500"
+                        className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-orange-500"
                       >
                         <option value="CRITICAL">CRITICAL</option>
                         <option value="MAJOR">MAJOR</option>
@@ -691,7 +691,7 @@ export default function QualityMasterTab({
                       onChange={(e) =>
                         setStandardForm({ ...standardForm, title: e.target.value })
                       }
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-orange-500"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-orange-500"
                       required
                     />
                   </div>
@@ -745,7 +745,7 @@ export default function QualityMasterTab({
                       onChange={(e) =>
                         setInstrumentForm({ ...instrumentForm, name: e.target.value })
                       }
-                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-hidden focus:border-orange-500"
+                      className="w-full px-3 py-2 text-xs rounded-xl border border-slate-200 focus:outline-none focus:border-orange-500"
                       required
                     />
                   </div>

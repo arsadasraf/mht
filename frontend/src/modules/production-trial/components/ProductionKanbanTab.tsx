@@ -27,6 +27,11 @@ import { useGetProductionTeamQuery } from '../api/productionTrialApi';
 import SearchableSelect, { SearchableSelectOption } from '../../../components/ui/SearchableSelect';
 import { useAppDispatch } from '../../../store/hooks';
 import { addToast } from '../../../store/uiSlice';
+import {
+  PRODUCTION_LINES,
+  ProductionLineKey,
+  resolveSubStageLine
+} from './ProductionProjectsTab';
 
 type KanbanColumnKey = 'NOT_STARTED' | 'IN_PROGRESS' | 'ON_HOLD' | 'COMPLETED';
 
@@ -34,6 +39,7 @@ interface ProductionSubStageItem {
   id: string;
   subStageCode: string;
   title: string;
+  productionLine: ProductionLineKey;
   status: KanbanColumnKey;
   completionPercent: number;
   assignedToUserId?: string | null;
@@ -59,6 +65,7 @@ export default function ProductionKanbanTab() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('ALL');
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>('ALL');
+  const [selectedLine, setSelectedLine] = useState<'ALL' | ProductionLineKey>('ALL');
 
   // Drag-and-Drop State
   const [draggedSubStageId, setDraggedSubStageId] = useState<string | null>(null);
@@ -105,6 +112,7 @@ export default function ProductionKanbanTab() {
             id: s.id,
             subStageCode: s.subStageCode || 'PRD-SS',
             title: s.title || 'Assembly Stage',
+            productionLine: resolveSubStageLine(s),
             status: st,
             completionPercent: Number(s.completionPercent || (st === 'COMPLETED' ? 100 : st === 'IN_PROGRESS' ? 50 : 0)),
             assignedToUserId: s.assignedUserId || s.assignedToUserId,
@@ -138,6 +146,9 @@ export default function ProductionKanbanTab() {
       if (selectedTechnicianId !== 'ALL' && item.assignedToUserId !== selectedTechnicianId && item.assignedToUserName !== selectedTechnicianId) {
         return false;
       }
+      if (selectedLine !== 'ALL' && item.productionLine !== selectedLine) {
+        return false;
+      }
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         const code = item.subStageCode.toLowerCase();
@@ -151,7 +162,7 @@ export default function ProductionKanbanTab() {
       }
       return true;
     });
-  }, [allProductionSubStages, selectedProjectId, selectedTechnicianId, searchTerm]);
+  }, [allProductionSubStages, selectedProjectId, selectedTechnicianId, selectedLine, searchTerm]);
 
   // Group by Column
   const columns = useMemo(() => {
@@ -304,7 +315,7 @@ export default function ProductionKanbanTab() {
         {/* Left Side: Work Order SearchableSelect & Search */}
         <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
           {/* Work Order Searchable Filter */}
-          <div className="w-full sm:w-72">
+          <div className="w-full sm:w-64">
             <SearchableSelect
               label="Work Order"
               value={selectedProjectId}
@@ -313,6 +324,35 @@ export default function ProductionKanbanTab() {
               allOptionLabel="All Work Orders"
               placeholder="Filter Work Order..."
             />
+          </div>
+
+          {/* 3 Parallel Production Line Filter Pills */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setSelectedLine('ALL')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                selectedLine === 'ALL'
+                  ? 'bg-orange-500 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              All Lines
+            </button>
+            {PRODUCTION_LINES.map((line) => (
+              <button
+                key={line.key}
+                type="button"
+                onClick={() => setSelectedLine(line.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  selectedLine === line.key
+                    ? 'bg-orange-500 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                {line.shortLabel}
+              </button>
+            ))}
           </div>
 
           {/* Technician Filter */}
@@ -353,12 +393,13 @@ export default function ProductionKanbanTab() {
 
         {/* Right Side: Total Summary */}
         <div className="flex items-center gap-2 w-full md:w-auto justify-end">
-          {(selectedProjectId !== 'ALL' || selectedTechnicianId !== 'ALL' || searchTerm) && (
+          {(selectedProjectId !== 'ALL' || selectedTechnicianId !== 'ALL' || selectedLine !== 'ALL' || searchTerm) && (
             <button
               type="button"
               onClick={() => {
                 setSelectedProjectId('ALL');
                 setSelectedTechnicianId('ALL');
+                setSelectedLine('ALL');
                 setSearchTerm('');
               }}
               className="flex items-center gap-1.5 px-3 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
@@ -425,14 +466,21 @@ export default function ProductionKanbanTab() {
                           isDragging ? 'opacity-40 scale-95' : ''
                         }`}
                       >
-                        {/* Work Order Tag & Priority */}
+                        {/* Work Order Tag & Parallel Line Badge */}
                         <div className="flex items-center justify-between gap-2 mb-1.5">
                           <span className="font-mono text-[10px] font-extrabold text-orange-700 bg-orange-50 px-2 py-0.5 rounded-md border border-orange-200">
                             {item.workOrderNumber}
                           </span>
-                          <span className="text-[10px] font-bold text-slate-500 truncate max-w-[120px]">
-                            {item.customerName}
-                          </span>
+                          {(() => {
+                            const lineCfg = PRODUCTION_LINES.find((l) => l.key === item.productionLine) || PRODUCTION_LINES[0];
+                            return (
+                              <span
+                                className={`text-[10px] font-bold px-2 py-0.5 rounded-md border ${lineCfg.badgeClass}`}
+                              >
+                                {lineCfg.shortLabel}
+                              </span>
+                            );
+                          })()}
                         </div>
 
                         {/* Title & Code */}
@@ -440,8 +488,8 @@ export default function ProductionKanbanTab() {
                           <div className="text-xs font-extrabold text-slate-900 leading-tight">
                             {item.title}
                           </div>
-                          <div className="font-mono text-[10px] text-slate-400 font-semibold">
-                            {item.subStageCode} • {item.machineModel}
+                          <div className="font-mono text-[10px] text-slate-400 font-semibold truncate">
+                            {item.subStageCode} • {item.customerName}
                           </div>
                         </div>
 

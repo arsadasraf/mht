@@ -37,6 +37,11 @@ import {
   useUpdateProductionSubStageMutation,
   useDeleteProductionSubStageMutation
 } from '../api/productionTrialApi';
+import {
+  PRODUCTION_LINES,
+  ProductionLineKey,
+  resolveSubStageLine
+} from './ProductionProjectsTab';
 
 export type ProductionMasterSubTab = 'team' | 'sub-stages';
 
@@ -45,8 +50,9 @@ interface ProductionMastersTabProps {
 }
 
 const DEPARTMENTS = [
-  { value: 'MECHANICAL_ASSEMBLY', label: 'Mechanical Assembly' },
-  { value: 'ELECTRICAL_PANEL', label: 'Electrical & Panel Wiring' },
+  { value: 'MECHANICAL_ASSEMBLY', label: 'Mechanical Line Assembly' },
+  { value: 'ELECTRICAL_PANEL', label: 'Electrical & Panel Line' },
+  { value: 'AUTOMATION_PLC', label: 'Automation & PLC Line' },
   { value: 'PNEUMATICS_LUBRICATION', label: 'Pneumatics & Lubrication' },
   { value: 'TESTING_TRIAL', label: 'Machine Trial & Testing' },
   { value: 'TOOLING_FABRICATION', label: 'Tooling & Fabrication' }
@@ -134,7 +140,8 @@ export default function ProductionMastersTab({ initialSubTab }: ProductionMaster
   const [subStageForm, setSubStageForm] = useState({
     subStageCode: '',
     name: '',
-    parentStageCode: 'PRODUCTION_ASSEMBLY',
+    productionLine: 'MECHANICAL' as ProductionLineKey,
+    parentStageCode: 'MECHANICAL',
     defaultOrder: 1,
     standardDays: 5,
     weightPercent: 10,
@@ -178,15 +185,17 @@ export default function ProductionMastersTab({ initialSubTab }: ProductionMaster
   // Filtered Sub-Stages
   const filteredSubStages = useMemo(() => {
     return subStages.filter((s: any) => {
+      const resolvedLine = resolveSubStageLine(s);
       if (subStageSearch.trim()) {
         const q = subStageSearch.toLowerCase();
         const code = (s.subStageCode || '').toLowerCase();
         const name = (s.subStageName || s.name || '').toLowerCase();
         const desc = (s.description || '').toLowerCase();
-        if (!code.includes(q) && !name.includes(q) && !desc.includes(q)) return false;
+        const line = resolvedLine.toLowerCase();
+        if (!code.includes(q) && !name.includes(q) && !desc.includes(q) && !line.includes(q)) return false;
       }
       for (const [key, vals] of Object.entries(subStageFilters)) {
-        const itemVal = String(s[key] || '');
+        const itemVal = key === 'productionLine' ? resolvedLine : String(s[key] || '');
         if (!vals.includes(itemVal)) return false;
       }
       return true;
@@ -293,7 +302,8 @@ export default function ProductionMastersTab({ initialSubTab }: ProductionMaster
     setSubStageForm({
       subStageCode: '',
       name: '',
-      parentStageCode: 'PRODUCTION_ASSEMBLY',
+      productionLine: 'MECHANICAL',
+      parentStageCode: 'MECHANICAL',
       defaultOrder: subStages.length + 1,
       standardDays: 5,
       weightPercent: 10,
@@ -306,10 +316,12 @@ export default function ProductionMastersTab({ initialSubTab }: ProductionMaster
   };
 
   const handleOpenEditSubStage = (s: any) => {
+    const resolvedLine = resolveSubStageLine(s);
     setSubStageForm({
       subStageCode: s.subStageCode || '',
       name: s.subStageName || s.name || '',
-      parentStageCode: s.parentStageCode || 'PRODUCTION_ASSEMBLY',
+      productionLine: resolvedLine,
+      parentStageCode: resolvedLine,
       defaultOrder: Number(s.defaultOrder) || 1,
       standardDays: Number(s.standardDays) || 5,
       weightPercent: Number(s.weightPercent) || 10,
@@ -758,7 +770,25 @@ export default function ProductionMastersTab({ initialSubTab }: ProductionMaster
                         }
                       />
                     </th>
-                    <th className="py-3 px-3 min-w-[160px]">Parent Stage</th>
+                    <th className="py-3 px-3 min-w-[160px]">
+                      <ExcelColumnFilter
+                        title="Production Line"
+                        columnKey="productionLine"
+                        selectedValues={subStageFilters['productionLine'] || null}
+                        distinctValues={getDistinctValues(
+                          subStages.map((s: any) => ({ ...s, productionLine: resolveSubStageLine(s) })),
+                          'productionLine'
+                        )}
+                        onFilterChange={(vals) =>
+                          setSubStageFilters((prev) => {
+                            const next = { ...prev };
+                            if (!vals || vals.length === 0) delete next['productionLine'];
+                            else next['productionLine'] = vals;
+                            return next;
+                          })
+                        }
+                      />
+                    </th>
                     <th className="py-3 px-3 min-w-[120px] text-center">Standard Days</th>
                     <th className="py-3 px-3 min-w-[110px] text-center">Weight %</th>
                     <th className="py-3 px-3 w-28 text-center">Status</th>
@@ -803,7 +833,19 @@ export default function ProductionMastersTab({ initialSubTab }: ProductionMaster
                             <div className="text-[11px] text-slate-400 truncate max-w-sm">{s.description}</div>
                           )}
                         </td>
-                        <td className="py-3 px-3 font-semibold text-slate-700">{s.parentStageCode}</td>
+                        <td className="py-3 px-3">
+                          {(() => {
+                            const lineKey = resolveSubStageLine(s);
+                            const lineCfg = PRODUCTION_LINES.find((l) => l.key === lineKey) || PRODUCTION_LINES[0];
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1 px-2.5 py-0.5 rounded-lg text-[11px] font-bold border ${lineCfg.badgeClass}`}
+                              >
+                                {lineCfg.label}
+                              </span>
+                            );
+                          })()}
+                        </td>
                         <td className="py-3 px-3 text-center font-bold text-slate-800">
                           {s.standardDays} {s.standardDays === 1 ? 'day' : 'days'}
                         </td>
@@ -1098,6 +1140,38 @@ export default function ProductionMastersTab({ initialSubTab }: ProductionMaster
                     className="w-full px-3 py-2 text-xs font-bold rounded-xl border border-slate-200 bg-white focus:border-orange-500 focus:outline-none"
                     required
                   />
+                </div>
+
+                {/* Production Line Selector */}
+                <div className="sm:col-span-2">
+                  <label className="block text-[11px] font-extrabold text-slate-700 uppercase tracking-wider mb-1.5">
+                    Parallel Production Line <span className="text-red-500">*</span>
+                  </label>
+                  <div className="grid grid-cols-3 gap-2">
+                    {PRODUCTION_LINES.map((line) => {
+                      const active = subStageForm.productionLine === line.key;
+                      return (
+                        <button
+                          key={line.key}
+                          type="button"
+                          onClick={() =>
+                            setSubStageForm({
+                              ...subStageForm,
+                              productionLine: line.key,
+                              parentStageCode: line.key
+                            })
+                          }
+                          className={`px-3 py-2 rounded-xl text-xs font-bold border transition-all cursor-pointer ${
+                            active
+                              ? 'bg-orange-500 text-white border-orange-500 shadow-xs'
+                              : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                          }`}
+                        >
+                          {line.shortLabel}
+                        </button>
+                      );
+                    })}
+                  </div>
                 </div>
 
                 {/* Sub-Stage Name */}

@@ -403,53 +403,67 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
     (currentSubTab === 'sub-stages' && (subStageSearch.trim() || Object.keys(subStageFilters).length > 0));
 
   return (
-    <div className="space-y-6">
-      {/* Top Banner Ribbon & Modern Pill Tabs */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200/60 flex items-center justify-center text-orange-600 shadow-xs">
-            <Sliders className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-lg font-extrabold text-slate-900 tracking-tight">After Sales & Service Masters</h1>
-          </div>
-        </div>
-
-        {/* Modern Button-Type Tabs */}
-        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200/80">
+    <div className="space-y-4">
+      {/* Top Masters Navigation Ribbon: Pure Button-Type Tabs */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto">
           <Link
             href="/after-sales/masters/customers"
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-150 ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
               currentSubTab === 'customers'
-                ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                ? 'bg-orange-500 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
           >
-            <Building2 className="w-3.5 h-3.5" />
+            <Building2 size={14} />
             <span>Customers</span>
           </Link>
           <Link
             href="/after-sales/masters/team"
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-150 ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
               currentSubTab === 'team'
-                ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                ? 'bg-orange-500 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
+            <Users size={14} />
             <span>Field Service Team ({teamMembers.length})</span>
           </Link>
           <Link
             href="/after-sales/masters/sub-stages"
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-150 ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
               currentSubTab === 'sub-stages'
-                ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                ? 'bg-orange-500 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
           >
-            <Workflow className="w-3.5 h-3.5" />
+            <Workflow size={14} />
             <span>Service Sub-Stages ({subStages.length})</span>
           </Link>
+        </div>
+
+        {/* Primary Action Button */}
+        <div>
+          {currentSubTab === 'team' && (
+            <button
+              type="button"
+              onClick={handleOpenAddTeamModal}
+              className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Add Team Member</span>
+            </button>
+          )}
+          {currentSubTab === 'sub-stages' && (
+            <button
+              type="button"
+              onClick={handleOpenAddSubStageModal}
+              className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Add Sub-Stage</span>
+            </button>
+          )}
         </div>
       </div>
 
@@ -463,21 +477,22 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
       {/* SUB-TAB 2: FIELD SERVICE TEAM */}
       {currentSubTab === 'team' && (
         <div className="space-y-4">
-          {/* Dedicated Table Toolbar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="relative flex-1 max-w-md">
+          {/* Top In-Line Search & Metrics Bar */}
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-96">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search engineer, code, designation or skill..."
+                placeholder="Search engineer by name, code, designation, skills..."
                 value={teamSearch}
                 onChange={(e) => setTeamSearch(e.target.value)}
-                className="w-full pl-9 pr-9 py-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-orange-500 focus:outline-none transition-all"
               />
               {teamSearch && (
                 <button
+                  type="button"
                   onClick={() => setTeamSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -487,20 +502,17 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
             <div className="flex items-center gap-2">
               {hasActiveFilters && (
                 <button
+                  type="button"
                   onClick={handleResetFilters}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset Filters</span>
+                  <span>Reset</span>
                 </button>
               )}
-              <button
-                onClick={handleOpenAddTeamModal}
-                className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl shadow-xs transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Team Member</span>
-              </button>
+              <span className="text-xs font-bold text-slate-600 px-3 py-1 bg-slate-50 border border-slate-200 rounded-xl">
+                {filteredTeam.length} Active Members
+              </span>
             </div>
           </div>
 
@@ -699,21 +711,22 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
       {/* SUB-TAB 3: SERVICE SUB-STAGES */}
       {currentSubTab === 'sub-stages' && (
         <div className="space-y-4">
-          {/* Dedicated Table Toolbar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="relative flex-1 max-w-md">
+          {/* Top In-Line Search & Metrics Bar */}
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-96">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search sub-stage title, code or description..."
+                placeholder="Search service sub-stage by title, code or description..."
                 value={subStageSearch}
                 onChange={(e) => setSubStageSearch(e.target.value)}
-                className="w-full pl-9 pr-9 py-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-orange-500 focus:outline-none transition-all"
               />
               {subStageSearch && (
                 <button
+                  type="button"
                   onClick={() => setSubStageSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -723,20 +736,17 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
             <div className="flex items-center gap-2">
               {hasActiveFilters && (
                 <button
+                  type="button"
                   onClick={handleResetFilters}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset Filters</span>
+                  <span>Reset</span>
                 </button>
               )}
-              <button
-                onClick={handleOpenAddSubStageModal}
-                className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl shadow-xs transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Sub-Stage</span>
-              </button>
+              <span className="text-xs font-bold text-slate-600 px-3 py-1 bg-slate-50 border border-slate-200 rounded-xl">
+                {filteredSubStages.length} Configured Sub-Stages
+              </span>
             </div>
           </div>
 
@@ -933,7 +943,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     required
                     value={teamForm.memberCode}
                     onChange={(e) => setTeamForm({ ...teamForm, memberCode: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -947,7 +957,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     placeholder="e.g. Rahul Sharma"
                     value={teamForm.fullName}
                     onChange={(e) => setTeamForm({ ...teamForm, fullName: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -961,7 +971,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     placeholder="e.g. Senior Commissioning Engineer"
                     value={teamForm.designation}
                     onChange={(e) => setTeamForm({ ...teamForm, designation: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -970,7 +980,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                   <select
                     value={teamForm.department}
                     onChange={(e) => setTeamForm({ ...teamForm, department: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   >
                     {DEPARTMENTS.map((dept) => (
                       <option key={dept.value} value={dept.value}>
@@ -985,7 +995,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                   <select
                     value={teamForm.skillSpecialty}
                     onChange={(e) => setTeamForm({ ...teamForm, skillSpecialty: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   >
                     {SKILL_SPECIALTIES.map((spec) => (
                       <option key={spec} value={spec}>
@@ -1002,7 +1012,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     placeholder="+91 98765 43210"
                     value={teamForm.phone}
                     onChange={(e) => setTeamForm({ ...teamForm, phone: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1013,7 +1023,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     placeholder="engineer@machinehouse.in"
                     value={teamForm.email}
                     onChange={(e) => setTeamForm({ ...teamForm, email: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1024,7 +1034,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     placeholder="Field commissioning authorization, international passport, Siemens PLC certified..."
                     value={teamForm.notes}
                     onChange={(e) => setTeamForm({ ...teamForm, notes: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1107,7 +1117,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     required
                     value={subStageForm.subStageCode}
                     onChange={(e) => setSubStageForm({ ...subStageForm, subStageCode: e.target.value.toUpperCase() })}
-                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1121,7 +1131,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     placeholder="e.g. On-Site Mechanical Installation"
                     value={subStageForm.name}
                     onChange={(e) => setSubStageForm({ ...subStageForm, name: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1132,7 +1142,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     min={1}
                     value={subStageForm.defaultOrder}
                     onChange={(e) => setSubStageForm({ ...subStageForm, defaultOrder: parseInt(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1143,7 +1153,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     min={1}
                     value={subStageForm.standardDays}
                     onChange={(e) => setSubStageForm({ ...subStageForm, standardDays: parseInt(e.target.value) || 1 })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1155,7 +1165,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     max={100}
                     value={subStageForm.weightPercent}
                     onChange={(e) => setSubStageForm({ ...subStageForm, weightPercent: parseFloat(e.target.value) || 0 })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1179,7 +1189,7 @@ export default function AfterSalesMastersTab({ initialSubTab }: AfterSalesMaster
                     placeholder="Sign-off criteria, customer acceptance protocol, handover documentation..."
                     value={subStageForm.description}
                     onChange={(e) => setSubStageForm({ ...subStageForm, description: e.target.value })}
-                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
               </div>

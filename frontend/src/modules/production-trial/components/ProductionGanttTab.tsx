@@ -26,6 +26,11 @@ import { useGetProductionTeamQuery } from '../api/productionTrialApi';
 import SearchableSelect, { SearchableSelectOption } from '../../../components/ui/SearchableSelect';
 import { useAppDispatch } from '../../../store/hooks';
 import { addToast } from '../../../store/uiSlice';
+import {
+  PRODUCTION_LINES,
+  ProductionLineKey,
+  resolveSubStageLine
+} from './ProductionProjectsTab';
 
 type ViewMode = 'PROJECT' | 'TECHNICIAN';
 type TimeScale = 'DAY' | 'WEEK' | 'MONTH';
@@ -35,6 +40,7 @@ interface GanttSubStage {
   id: string;
   subStageCode: string;
   title: string;
+  productionLine: ProductionLineKey;
   status: SubStageStatus;
   completionPercent: number;
   assignedToUserId?: string | null;
@@ -67,6 +73,7 @@ export default function ProductionGanttTab() {
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedProjectId, setSelectedProjectId] = useState<string>('ALL');
   const [selectedTechnicianId, setSelectedTechnicianId] = useState<string>('ALL');
+  const [selectedLine, setSelectedLine] = useState<'ALL' | ProductionLineKey>('ALL');
 
   // Accordion collapsed state for groups
   const [collapsedGroups, setCollapsedGroups] = useState<Record<string, boolean>>({});
@@ -127,6 +134,7 @@ export default function ProductionGanttTab() {
             id: s.id,
             subStageCode: s.subStageCode || 'PRD-SS',
             title: s.title || 'Assembly Stage',
+            productionLine: resolveSubStageLine(s),
             status: st,
             completionPercent: Number(s.completionPercent || (st === 'COMPLETED' ? 100 : st === 'IN_PROGRESS' ? 50 : 0)),
             assignedToUserId: s.assignedUserId || s.assignedToUserId,
@@ -158,6 +166,9 @@ export default function ProductionGanttTab() {
       if (selectedTechnicianId !== 'ALL' && s.assignedToUserId !== selectedTechnicianId && s.assignedToUserName !== selectedTechnicianId) {
         return false;
       }
+      if (selectedLine !== 'ALL' && s.productionLine !== selectedLine) {
+        return false;
+      }
       if (searchTerm.trim()) {
         const q = searchTerm.toLowerCase();
         const code = s.subStageCode.toLowerCase();
@@ -171,7 +182,7 @@ export default function ProductionGanttTab() {
       }
       return true;
     });
-  }, [allSubStages, selectedProjectId, selectedTechnicianId, searchTerm]);
+  }, [allSubStages, selectedProjectId, selectedTechnicianId, selectedLine, searchTerm]);
 
   // Grouped by Project or Technician
   const groupedData = useMemo<GanttGroup[]>(() => {
@@ -306,6 +317,35 @@ export default function ProductionGanttTab() {
               allOptionLabel="All Work Orders"
               placeholder="Filter Work Order..."
             />
+          </div>
+
+          {/* 3 Parallel Production Line Filter Pills */}
+          <div className="flex items-center gap-1 p-1 bg-slate-100 rounded-xl overflow-x-auto">
+            <button
+              type="button"
+              onClick={() => setSelectedLine('ALL')}
+              className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                selectedLine === 'ALL'
+                  ? 'bg-orange-500 text-white shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              All Lines
+            </button>
+            {PRODUCTION_LINES.map((line) => (
+              <button
+                key={line.key}
+                type="button"
+                onClick={() => setSelectedLine(line.key)}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  selectedLine === line.key
+                    ? 'bg-orange-500 text-white shadow-xs'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+                }`}
+              >
+                {line.shortLabel}
+              </button>
+            ))}
           </div>
 
           {/* Search Bar */}
@@ -453,11 +493,23 @@ export default function ProductionGanttTab() {
                           >
                             {/* Left Meta Info */}
                             <div className="w-80 p-2.5 shrink-0 border-r border-slate-200 space-y-0.5">
-                              <div className="font-extrabold text-slate-900 text-xs flex items-center justify-between">
-                                <span className="truncate max-w-[200px]">{item.title}</span>
-                                <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded">
-                                  {item.subStageCode}
-                                </span>
+                              <div className="font-extrabold text-slate-900 text-xs flex items-center justify-between gap-1">
+                                <span className="truncate max-w-[165px]">{item.title}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {(() => {
+                                    const lineCfg = PRODUCTION_LINES.find((l) => l.key === item.productionLine) || PRODUCTION_LINES[0];
+                                    return (
+                                      <span
+                                        className={`text-[9px] font-bold px-1.5 py-0.5 rounded border ${lineCfg.badgeClass}`}
+                                      >
+                                        {lineCfg.shortLabel}
+                                      </span>
+                                    );
+                                  })()}
+                                  <span className="font-mono text-[10px] text-orange-600 bg-orange-50 px-1 rounded">
+                                    {item.subStageCode}
+                                  </span>
+                                </div>
                               </div>
                               <div className="flex items-center justify-between text-[10px] text-slate-500">
                                 <span>{item.assignedToUserName}</span>

@@ -413,11 +413,16 @@ export const addSubStageToMilestone = async (req, res, next) => {
       title,
       subStageCode,
       departmentModule,
+      productionLine,
       assignedToUserId,
+      assignedUserId,
       assignedToUserName,
+      assignedUserName,
       assignedToUserEmail,
       baselineStartDate,
       targetEndDate,
+      estimatedHours,
+      priority,
       projectId: reqProjectId
     } = req.body;
 
@@ -433,7 +438,7 @@ export const addSubStageToMilestone = async (req, res, next) => {
       });
     }
 
-    // If milestone ID is synthetic (e.g. auto-purchase-<projectId>) or not found, auto-find or create the department milestone!
+    // If milestone ID is synthetic (e.g. auto-production-<projectId>) or not found, auto-find or create the department milestone!
     if (!milestone && (id.startsWith('auto-') || reqProjectId)) {
       const targetProjId = (reqProjectId || id.replace(/^auto-[a-z0-9_-]+-/, '')).toUpperCase().trim();
       const proj = await prisma.project.findFirst({
@@ -441,18 +446,26 @@ export const addSubStageToMilestone = async (req, res, next) => {
       });
 
       if (proj) {
-        const deptMod = String(departmentModule || 'purchase').toLowerCase();
-        // Look for existing milestone for this department
+        const deptMod = String(departmentModule || 'production').toLowerCase();
         milestone = await prisma.milestone.findFirst({
           where: {
             projectId: proj.projectId,
-            departmentModule: deptMod
+            OR: [
+              { departmentModule: { equals: deptMod, mode: 'insensitive' } },
+              { stageCode: { contains: deptMod, mode: 'insensitive' } },
+              { title: { contains: deptMod, mode: 'insensitive' } }
+            ]
           },
           include: { subStages: true }
         });
 
         if (!milestone) {
-          const defaultStageTitle = deptMod === 'purchase' ? 'Purchase & Sourcing' : (deptMod.charAt(0).toUpperCase() + deptMod.slice(1));
+          const defaultStageTitle =
+            deptMod === 'purchase'
+              ? 'Purchase & Sourcing'
+              : deptMod === 'production'
+              ? 'Production & Assembly'
+              : deptMod.charAt(0).toUpperCase() + deptMod.slice(1);
           const count = await prisma.milestone.count({ where: { projectId: proj.projectId } });
           milestone = await prisma.milestone.create({
             data: {
@@ -463,7 +476,7 @@ export const addSubStageToMilestone = async (req, res, next) => {
               stageCode: deptMod.toUpperCase(),
               departmentModule: deptMod,
               order: count + 1,
-              leadRole: deptMod === 'purchase' ? 'Purchase Manager' : 'Project Manager',
+              leadRole: deptMod === 'purchase' ? 'Purchase Manager' : deptMod === 'production' ? 'Production Manager' : 'Project Manager',
               weightPercent: 15,
               baselineDate: new Date(),
               projectedDate: proj.deliveryCommitmentDate ? new Date(proj.deliveryCommitmentDate) : new Date(Date.now() + 14 * 86400000),
@@ -485,21 +498,30 @@ export const addSubStageToMilestone = async (req, res, next) => {
     const normalizedCode = (subStageCode || title)
       .toUpperCase()
       .trim()
-      .replace(/[^A-Z0-9]+/g, '_');
+      .replace(/[^A-Z0-9_-]+/g, '_');
+
+    const normalizedLine = ['MECHANICAL', 'ELECTRICAL', 'AUTOMATION'].includes(
+      String(productionLine || '').toUpperCase().trim()
+    )
+      ? String(productionLine).toUpperCase().trim()
+      : 'MECHANICAL';
 
     await prisma.projectSubStage.create({
       data: {
         milestoneId: milestone.id,
         projectId: milestone.projectId,
         departmentModule: departmentModule || milestone.departmentModule || 'design',
+        productionLine: normalizedLine,
         subStageCode: normalizedCode,
         title: title.trim(),
         order: (milestone.subStages?.length || 0) + 1,
-        assignedToUserId: assignedToUserId || null,
-        assignedToUserName: assignedToUserName || '',
+        assignedToUserId: assignedToUserId || assignedUserId || null,
+        assignedToUserName: assignedToUserName || assignedUserName || '',
         assignedToUserEmail: assignedToUserEmail || '',
         baselineStartDate: baselineStartDate ? new Date(baselineStartDate) : new Date(),
         targetEndDate: targetEndDate ? new Date(targetEndDate) : milestone.projectedDate,
+        estimatedHours: estimatedHours !== undefined ? Number(estimatedHours) || 16 : 16,
+        priority: priority ? String(priority).toUpperCase() : 'MEDIUM',
         status: 'NOT_STARTED',
         completionPercent: 0,
         remarks: [],
@@ -535,6 +557,7 @@ export const updateSubStage = async (req, res, next) => {
     const {
       title,
       status,
+      productionLine,
       assignedToUserId,
       assignedToUserName,
       assignedToUserEmail,
@@ -578,6 +601,15 @@ export const updateSubStage = async (req, res, next) => {
       data: {
         title: title !== undefined ? title.trim() : existing.title,
         status: nextStatus,
+        ...(productionLine !== undefined
+          ? {
+              productionLine: ['MECHANICAL', 'ELECTRICAL', 'AUTOMATION'].includes(
+                String(productionLine).toUpperCase().trim()
+              )
+                ? String(productionLine).toUpperCase().trim()
+                : existing.productionLine
+            }
+          : {}),
         completionPercent: computedPercent,
         actualCompletionDate: isCompleted ? (existing.actualCompletionDate || new Date()) : null,
         assignedToUserId: assignedToUserId !== undefined ? assignedToUserId || null : existing.assignedToUserId,

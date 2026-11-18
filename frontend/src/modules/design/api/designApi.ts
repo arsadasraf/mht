@@ -57,7 +57,7 @@ export const designApi = apiSlice.injectEndpoints({
         method: 'POST',
         body
       }),
-      invalidatesTags: ['Bom']
+      invalidatesTags: ['Bom', 'Project']
     }),
     attachAssemblyToProject: builder.mutation({
       query: (body) => ({

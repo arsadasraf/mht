@@ -33,16 +33,119 @@ export const formatMilestone = (m) => ({
     : null
 });
 
-export const formatProject = (p, poDoc = null, bomDoc = null) => {
-  const attachedDrawings = Array.isArray(bomDoc?.summary?.attachedDrawings)
-    ? bomDoc.summary.attachedDrawings
-    : [];
-  const bomItems = Array.isArray(bomDoc?.items) ? bomDoc.items : [];
-  const isAttached = Boolean(bomDoc && (attachedDrawings.length > 0 || bomItems.length > 0));
+export const computeBomSummaryHelper = (items = [], attachedDrawings = [], rawSummary = {}) => {
+  let assemblyCount = 0;
+  let subAssemblyCount = 0;
+  let componentCount = 0;
+  let buyCount = 0;
+  let makeCount = 0;
+  let drawingsCount = attachedDrawings.length;
+  let estimatedTotalCostINR = 0;
+
+  for (const it of items) {
+    const t = String(it.itemType || it.classification || '').toUpperCase();
+    if (t === 'ASSEMBLY' || t === 'FG') assemblyCount++;
+    else if (t === 'SUB_ASSEMBLY') subAssemblyCount++;
+    else componentCount++;
+
+    const mob = String(it.makeOrBuy || '').toUpperCase();
+    if (mob === 'BUY') buyCount++;
+    else makeCount++;
+
+    const qty = Number(it.quantityPerMachine || it.baseQty) || 1;
+    const rate = Number(it.standardRateINR || it.rate || it.unitRate) || 0;
+    estimatedTotalCostINR += qty * rate;
+  }
+
+  return {
+    totalItems: items.length,
+    assemblyCount,
+    subAssemblyCount,
+    componentCount,
+    buyCount,
+    makeCount,
+    drawingsCount: Math.max(drawingsCount, Number(rawSummary?.drawingsCount) || 0),
+    estimatedTotalCostINR:
+      Math.round(estimatedTotalCostINR * 100) / 100 || Number(rawSummary?.estimatedTotalCostINR) || 0,
+    ...(typeof rawSummary === 'object' && rawSummary !== null ? rawSummary : {}),
+    attachedDrawings
+  };
+};
+
+export const resolveAttachedDrawings = (bomDoc, bomItems = []) => {
+  if (!bomDoc) return [];
+  const rawList =
+    Array.isArray(bomDoc.attachedDrawings) && bomDoc.attachedDrawings.length > 0
+      ? bomDoc.attachedDrawings
+      : Array.isArray(bomDoc.summary?.attachedDrawings) && bomDoc.summary.attachedDrawings.length > 0
+      ? bomDoc.summary.attachedDrawings
+      : [];
+
+  if (rawList.length > 0) return rawList;
+
+  const synthesized = [];
+  const seenCodes = new Set();
+
+  if (bomDoc.attachedAssemblyCode || bomDoc.attachedDrawingNumber) {
+    const code = bomDoc.attachedAssemblyCode || bomDoc.attachedDrawingNumber;
+    seenCodes.add(String(code).toUpperCase());
+    synthesized.push({
+      id: bomDoc.id,
+      itemCode: code,
+      drawingNumber: bomDoc.attachedDrawingNumber || code,
+      itemName: bomDoc.attachedAssemblyName || code,
+      classification: bomDoc.attachedDrawingType || 'ASSEMBLY',
+      revision: bomDoc.revision || 'REV-0',
+      approvalStatus: bomDoc.approvalStatus || (bomDoc.isFrozen ? 'APPROVED' : 'DRAFT'),
+      isFrozen: Boolean(bomDoc.isFrozen)
+    });
+  }
+
+  for (const it of bomItems) {
+    const code = it.drawingNumber || it.itemCode;
+    const type = String(it.itemType || it.classification || '').toUpperCase();
+    if (code && (type === 'ASSEMBLY' || type === 'SUB_ASSEMBLY') && !seenCodes.has(String(code).toUpperCase())) {
+      seenCodes.add(String(code).toUpperCase());
+      synthesized.push({
+        id: it.id || code,
+        itemCode: code,
+        drawingNumber: code,
+        itemName: it.itemName || code,
+        classification: type,
+        revision: it.versionCode || it.revision || bomDoc.revision || 'REV-0',
+        approvalStatus: bomDoc.approvalStatus || (bomDoc.isFrozen ? 'APPROVED' : 'DRAFT'),
+        isFrozen: Boolean(bomDoc.isFrozen),
+        primaryPdfUrl: it.drawingPdfUrl || it.primaryPdfUrl || ''
+      });
+    }
+  }
+
+  return synthesized;
+};
+
+export const formatProject = (p, poDoc = null, bomDoc = null, rateLookupMap = null) => {
+  const rawBomItems = Array.isArray(bomDoc?.items) ? bomDoc.items : [];
+  const bomItems = rateLookupMap
+    ? rawBomItems.map((it) => {
+        const currentRate = Number(it.standardRateINR || it.rate || it.unitRate || 0);
+        if (currentRate > 0) return it;
+        const code = String(it.itemCode || it.drawingNumber || '').trim().toUpperCase();
+        const fallbackRate = code ? rateLookupMap.get(code) || 0 : 0;
+        return fallbackRate > 0 ? { ...it, standardRateINR: fallbackRate } : it;
+      })
+    : rawBomItems;
+
+  const attachedDrawings = resolveAttachedDrawings(bomDoc, bomItems);
+  const isAttached = Boolean(
+    bomDoc && (attachedDrawings.length > 0 || bomItems.length > 0 || bomDoc.attachedAssemblyCode)
+  );
   const isBomLocked = Boolean(bomDoc?.isFrozen || bomDoc?.approvalStatus === 'LOCKED_FREEZE');
   const bomStatus = isBomLocked
     ? 'LOCKED_FREEZE'
     : bomDoc?.approvalStatus || (isAttached ? 'DRAFT' : 'NOT_ATTACHED');
+  const computedSummary = bomDoc
+    ? computeBomSummaryHelper(bomItems, attachedDrawings, bomDoc.summary)
+    : null;
 
   return {
     ...p,
@@ -78,10 +181,15 @@ export const formatProject = (p, poDoc = null, bomDoc = null) => {
     isBomLocked,
     attachedDrawingsCount: attachedDrawings.length,
     attachedDrawings,
-    bomSummary: bomDoc?.summary || null,
+    bomSummary: computedSummary,
     bomItems,
     bomId: bomDoc?.id || null,
-    bomNumber: bomDoc?.bomNumber || null
+    bomNumber: bomDoc?.bomNumber || null,
+    bomRevision: bomDoc?.revision || 'REV-0',
+    attachedAssemblyCode: bomDoc?.attachedAssemblyCode || p.attachedAssemblyCode || '',
+    attachedAssemblyName: bomDoc?.attachedAssemblyName || p.attachedAssemblyName || '',
+    bomApprovedByName: bomDoc?.approvedByName || '',
+    bomApprovedAt: bomDoc?.approvedAt || null
   };
 };
 
@@ -243,7 +351,10 @@ export const getProjects = async (req, res, next) => {
         projects
           .flatMap((p) => [p.projectId, p.workOrderNumber])
           .filter(Boolean)
-          .map((k) => String(k).trim())
+          .flatMap((k) => {
+            const raw = String(k).trim();
+            return [raw, raw.toUpperCase()];
+          })
       )
     );
     const bomMap = new Map();
@@ -255,18 +366,56 @@ export const getProjects = async (req, res, next) => {
               { projectId: { in: projectKeys } },
               { bomNumber: { in: projectKeys } }
             ]
-          },
-          include: {
-            items: {
-              orderBy: { itemSequence: 'asc' },
-              take: 100
-            }
           }
         })
         .catch(() => []);
       boms.forEach((b) => {
-        if (b.projectId) bomMap.set(b.projectId, b);
-        if (b.bomNumber) bomMap.set(b.bomNumber, b);
+        if (b.projectId) {
+          bomMap.set(b.projectId, b);
+          bomMap.set(String(b.projectId).trim().toUpperCase(), b);
+        }
+        if (b.bomNumber) {
+          bomMap.set(b.bomNumber, b);
+          bomMap.set(String(b.bomNumber).trim().toUpperCase(), b);
+        }
+      });
+    }
+
+    const rateLookupMap = new Map();
+    if (bomMap.size > 0) {
+      const [rmList, dmList, paList, poList, grnList] = await Promise.all([
+        prisma.rmItemMaster.findMany({ where: { isActive: true } }).catch(() => []),
+        prisma.designItemMaster.findMany({ where: { isActive: true } }).catch(() => []),
+        prisma.vendorPriceAgreement.findMany({ where: { isActive: true }, orderBy: { isPreferred: 'desc' } }).catch(() => []),
+        prisma.purchaseOrder.findMany({ orderBy: { createdAt: 'desc' }, take: 100 }).catch(() => []),
+        prisma.grnRecord.findMany({ orderBy: { receivedDate: 'desc' }, take: 100 }).catch(() => [])
+      ]);
+      rmList.forEach((r) => {
+        const c = String(r.name || '').trim().toUpperCase();
+        if (c && Number(r.standardRateINR) > 0) rateLookupMap.set(c, Number(r.standardRateINR));
+      });
+      dmList.forEach((d) => {
+        const c = String(d.itemCode || '').trim().toUpperCase();
+        if (c && Number(d.standardRateINR) > 0 && !rateLookupMap.has(c)) rateLookupMap.set(c, Number(d.standardRateINR));
+      });
+      paList.forEach((pa) => {
+        const c = String(pa.itemCode || '').trim().toUpperCase();
+        const pr = Number(pa.unitPrice || pa.equivalentRate || 0);
+        if (c && pr > 0 && !rateLookupMap.has(c)) rateLookupMap.set(c, pr);
+      });
+      poList.forEach((po) => {
+        (Array.isArray(po.items) ? po.items : []).forEach((it) => {
+          const c = String(it.itemCode || it.partCode || it.name || '').trim().toUpperCase();
+          const pr = Number(it.unitPrice || it.rate || 0);
+          if (c && pr > 0 && !rateLookupMap.has(c)) rateLookupMap.set(c, pr);
+        });
+      });
+      grnList.forEach((g) => {
+        (Array.isArray(g.items) ? g.items : []).forEach((it) => {
+          const c = String(it.itemCode || it.name || '').trim().toUpperCase();
+          const pr = Number(it.unitRate || it.unitPrice || it.rate || 0);
+          if (c && pr > 0 && !rateLookupMap.has(c)) rateLookupMap.set(c, pr);
+        });
       });
     }
 
@@ -274,13 +423,20 @@ export const getProjects = async (req, res, next) => {
       success: true,
       total,
       page: Number(page),
-      projects: projects.map((p) =>
-        formatProject(
+      projects: projects.map((p) => {
+        const k1 = String(p.projectId || '').trim().toUpperCase();
+        const k2 = String(p.workOrderNumber || '').trim().toUpperCase();
+        return formatProject(
           p,
           p.customerPoId ? poMap.get(p.customerPoId) : null,
-          bomMap.get(p.projectId) || bomMap.get(p.workOrderNumber) || null
-        )
-      )
+          bomMap.get(p.projectId) ||
+            bomMap.get(p.workOrderNumber) ||
+            bomMap.get(k1) ||
+            bomMap.get(k2) ||
+            null,
+          rateLookupMap
+        );
+      })
     });
   } catch (error) {
     next(error);
@@ -394,20 +550,17 @@ export const getProjectById = async (req, res, next) => {
     }
 
     // Lookup BOM & BOQ attached data
+    const pKey1 = String(project.projectId || '').trim();
+    const pKey2 = String(project.workOrderNumber || '').trim();
     const bomDoc = await prisma.bom
       .findFirst({
         where: {
           OR: [
-            { projectId: project.projectId },
-            { projectId: project.workOrderNumber },
-            { bomNumber: project.projectId },
-            { bomNumber: project.workOrderNumber }
+            { projectId: { equals: pKey1, mode: 'insensitive' } },
+            { projectId: { equals: pKey2, mode: 'insensitive' } },
+            { bomNumber: { equals: pKey1, mode: 'insensitive' } },
+            { bomNumber: { equals: pKey2, mode: 'insensitive' } }
           ]
-        },
-        include: {
-          items: {
-            orderBy: { itemSequence: 'asc' }
-          }
         }
       })
       .catch(() => null);
@@ -827,13 +980,22 @@ export const approveProject = async (req, res, next) => {
       }).catch(() => null);
     }
 
+    const bomDoc = await prisma.bom.findFirst({
+      where: {
+        OR: [
+          { projectId: { equals: String(updated.projectId || '').trim(), mode: 'insensitive' } },
+          { projectId: { equals: String(updated.workOrderNumber || '').trim(), mode: 'insensitive' } }
+        ]
+      }
+    }).catch(() => null);
+
     res.status(200).json({
       success: true,
       message:
         nextStatus === 'ASSIGNED_TO_DEPARTMENT'
           ? `All set! Work Order ${updated.workOrderNumber} approved and assigned to ${milestonesCount} department stage(s).`
           : `All set! Work Order ${updated.workOrderNumber} approved.`,
-      project: formatProject(updated, poDoc)
+      project: formatProject(updated, poDoc, bomDoc)
     });
   } catch (error) {
     next(error);
@@ -1137,10 +1299,19 @@ export const updateProject = async (req, res, next) => {
       }
     });
 
+    const bomDoc = await prisma.bom.findFirst({
+      where: {
+        OR: [
+          { projectId: { equals: String(fullProject?.projectId || '').trim(), mode: 'insensitive' } },
+          { projectId: { equals: String(fullProject?.workOrderNumber || '').trim(), mode: 'insensitive' } }
+        ]
+      }
+    }).catch(() => null);
+
     res.status(200).json({
       success: true,
       message: `All set! Work Order ${updated.workOrderNumber} updated successfully.`,
-      project: formatProject(fullProject)
+      project: formatProject(fullProject, null, bomDoc)
     });
   } catch (error) {
     next(error);
@@ -1261,6 +1432,504 @@ export const deleteProject = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: `All set! Work Order ${existing.workOrderNumber} deleted successfully.`
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Real-Time Project Costing Dashboard Aggregation
+ * Combines Contract Value, BOM & BOQ Estimated Cost (Make vs Buy),
+ * Vendor PO Committed Cost, Store GRN Landed Cost, and WIP Issued Material Cost.
+ */
+export const getProjectCostingDashboard = async (req, res, next) => {
+  try {
+    const [
+      projects,
+      customerPos,
+      boms,
+      purchaseOrders,
+      grns,
+      materialRequests,
+      rmMasters,
+      designMasters,
+      priceAgreements
+    ] = await Promise.all([
+      prisma.project.findMany({
+        orderBy: { createdAt: 'desc' }
+      }),
+      prisma.customerPo.findMany().catch(() => []),
+      prisma.bom.findMany().catch(() => []),
+      prisma.purchaseOrder.findMany({ orderBy: { createdAt: 'desc' } }).catch(() => []),
+      prisma.grnRecord.findMany({ orderBy: { receivedDate: 'desc' } }).catch(() => []),
+      prisma.storeMaterialRequest.findMany({ orderBy: { createdAt: 'desc' } }).catch(() => []),
+      prisma.rmItemMaster.findMany({ where: { isActive: true } }).catch(() => []),
+      prisma.designItemMaster.findMany({ where: { isActive: true } }).catch(() => []),
+      prisma.vendorPriceAgreement.findMany({ where: { isActive: true }, orderBy: { isPreferred: 'desc' } }).catch(() => [])
+    ]);
+
+    // Build Master Standard Rate Lookup Map (by itemCode / name)
+    const rateMap = new Map();
+    rmMasters.forEach((rm) => {
+      const code = String(rm.name || '').trim().toUpperCase();
+      if (code && Number(rm.standardRateINR) > 0) {
+        rateMap.set(code, Number(rm.standardRateINR));
+      }
+    });
+    designMasters.forEach((dm) => {
+      const code = String(dm.itemCode || '').trim().toUpperCase();
+      if (code && Number(dm.standardRateINR) > 0 && !rateMap.has(code)) {
+        rateMap.set(code, Number(dm.standardRateINR));
+      }
+    });
+    priceAgreements.forEach((pa) => {
+      const code = String(pa.itemCode || '').trim().toUpperCase();
+      const price = Number(pa.unitPrice || pa.equivalentRate || 0);
+      if (code && price > 0 && !rateMap.has(code)) {
+        rateMap.set(code, price);
+      }
+    });
+
+    // Also capture latest actual PO & GRN unit prices per itemCode
+    const poRateMap = new Map();
+    purchaseOrders.forEach((po) => {
+      const items = Array.isArray(po.items) ? po.items : [];
+      items.forEach((it) => {
+        const code = String(it.itemCode || it.partCode || it.name || '').trim().toUpperCase();
+        const rate = Number(it.unitPrice || it.rate || it.standardRateINR || 0);
+        if (code && rate > 0 && !poRateMap.has(code)) {
+          poRateMap.set(code, rate);
+        }
+      });
+    });
+    grns.forEach((grn) => {
+      const items = Array.isArray(grn.items) ? grn.items : [];
+      items.forEach((it) => {
+        const code = String(it.itemCode || it.name || '').trim().toUpperCase();
+        const rate = Number(it.unitRate || it.unitPrice || it.rate || 0);
+        if (code && rate > 0 && !poRateMap.has(code)) {
+          poRateMap.set(code, rate);
+        }
+      });
+    });
+
+    // Map Customer POs
+    const cpoMap = new Map();
+    customerPos.forEach((cpo) => {
+      cpoMap.set(cpo.id, cpo);
+    });
+
+    // Map BOMs by uppercase projectId / bomNumber
+    const bomMap = new Map();
+    boms.forEach((b) => {
+      if (b.projectId) bomMap.set(String(b.projectId).trim().toUpperCase(), b);
+      if (b.bomNumber) bomMap.set(String(b.bomNumber).trim().toUpperCase(), b);
+    });
+
+    let portfolioContractValueINR = 0;
+    let portfolioEstimatedBomCostINR = 0;
+    let portfolioCommittedPoCostINR = 0;
+    let portfolioInwardGrnCostINR = 0;
+    let portfolioWipIssuedCostINR = 0;
+
+    const projectCostingRows = projects.map((p) => {
+      const woKey = String(p.workOrderNumber || p.projectId || '').trim().toUpperCase();
+      const prjKey = String(p.projectId || p.workOrderNumber || '').trim().toUpperCase();
+      const poDoc = p.customerPoId ? cpoMap.get(p.customerPoId) : null;
+      const bomDoc = bomMap.get(woKey) || bomMap.get(prjKey) || null;
+
+      // 1. Contract Revenue
+      const contractValueINR =
+        Number(p.contractValue?.amount) ||
+        Number(poDoc?.totalAmount) ||
+        Number(poDoc?.subtotal) ||
+        0;
+
+      // 2. BOM & BOQ Costing
+      const rawBomItems = Array.isArray(bomDoc?.items) ? bomDoc.items : [];
+      const attachedDrawings = resolveAttachedDrawings(bomDoc, rawBomItems);
+
+      let estimatedBomCostINR = 0;
+      let makeEstimatedCostINR = 0;
+      let buyEstimatedCostINR = 0;
+
+      const itemizedBomCosting = rawBomItems.map((it, idx) => {
+        const code = String(it.itemCode || it.drawingNumber || it.name || `ITEM-${idx + 1}`).trim();
+        const upperCode = code.toUpperCase();
+        const qty = Number(it.quantityPerMachine ?? it.baseQty ?? it.qty ?? 1) || 1;
+        const inlineRate = Number(it.standardRateINR ?? it.rate ?? it.unitPrice ?? 0) || 0;
+        const masterRate = rateMap.get(upperCode) || 0;
+        const latestPoRate = poRateMap.get(upperCode) || 0;
+        const effectiveRateINR = inlineRate > 0 ? inlineRate : masterRate > 0 ? masterRate : latestPoRate;
+        const lineTotalINR = Math.round(qty * effectiveRateINR * 100) / 100;
+        const makeOrBuy = String(it.makeOrBuy || 'BUY').toUpperCase();
+
+        estimatedBomCostINR += lineTotalINR;
+        if (makeOrBuy === 'MAKE') {
+          makeEstimatedCostINR += lineTotalINR;
+        } else {
+          buyEstimatedCostINR += lineTotalINR;
+        }
+
+        return {
+          id: it.id || `${code}_${idx}`,
+          index: idx,
+          slNo: idx + 1,
+          level: Number(it.level) || 1,
+          parentItemCode: it.parentItemCode || null,
+          itemCode: code,
+          itemName: it.itemName || it.description || code,
+          itemType: String(it.itemType || it.classification || 'COMPONENT').toUpperCase(),
+          category: it.category || it.subAssemblyGroup || 'General',
+          revision: it.versionCode || it.revision || 'Rev 1.0',
+          makeOrBuy,
+          uom: it.uom || it.baseUom || 'Nos',
+          quantityPerMachine: qty,
+          standardRateINR: inlineRate || masterRate,
+          latestPoRateINR: latestPoRate,
+          effectiveRateINR,
+          lineTotalINR
+        };
+      });
+
+      if (estimatedBomCostINR === 0 && Number(bomDoc?.summary?.estimatedTotalCostINR) > 0) {
+        estimatedBomCostINR = Number(bomDoc.summary.estimatedTotalCostINR);
+      }
+
+      // 3. Committed Vendor Purchase Orders for this Work Order
+      const matchedPos = purchaseOrders.filter((po) => {
+        const poPrj = String(po.projectId || '').trim().toUpperCase();
+        return poPrj === woKey || poPrj === prjKey;
+      });
+
+      const projectPoNumbers = new Set();
+      let committedPoCostINR = 0;
+      const poLedger = matchedPos.map((po) => {
+        if (po.poNumber) projectPoNumbers.add(String(po.poNumber).trim().toUpperCase());
+        const poItems = Array.isArray(po.items) ? po.items : [];
+        const itemsSum = poItems.reduce(
+          (acc, it) => acc + (Number(it.quantity || it.qty || 0) * Number(it.unitPrice || it.rate || 0)),
+          0
+        );
+        const amountINR =
+          Number(po.totalAmount?.baseAmountINR) ||
+          Number(po.totalAmount?.amount) ||
+          itemsSum ||
+          0;
+        committedPoCostINR += amountINR;
+        return {
+          id: po.id,
+          poNumber: po.poNumber,
+          vendorName: po.vendorName || 'Vendor',
+          status: po.status,
+          itemsCount: poItems.length,
+          amountINR: Math.round(amountINR * 100) / 100,
+          createdAt: po.createdAt
+        };
+      });
+
+      // 4. Inward Store GRN Landed Cost for this Work Order
+      const matchedGrns = grns.filter((grn) => {
+        const grnPrj = String(grn.projectId || '').trim().toUpperCase();
+        const grnPo = String(grn.poNumber || '').trim().toUpperCase();
+        return (
+          (grnPrj && (grnPrj === woKey || grnPrj === prjKey)) ||
+          (grnPo && projectPoNumbers.has(grnPo))
+        );
+      });
+
+      let inwardGrnCostINR = 0;
+      let grnLogisticsCostINR = 0;
+      const grnLedger = matchedGrns.map((grn) => {
+        const grandTotal = Number(grn.grandTotal || grn.taxableSubtotal || 0);
+        const logistics =
+          Number(grn.transportationCharges || 0) +
+          Number(grn.transportationGstAmount || 0) +
+          Number(grn.packingCharges || 0) +
+          Number(grn.packingGstAmount || 0);
+        inwardGrnCostINR += grandTotal;
+        grnLogisticsCostINR += logistics;
+        return {
+          id: grn.id,
+          grnNumber: grn.grnNumber,
+          poNumber: grn.poNumber || 'Direct GRN',
+          vendorName: grn.vendorName || 'Vendor',
+          qcStatus: grn.qcStatus,
+          taxableSubtotal: Number(grn.taxableSubtotal || 0),
+          logisticsINR: Math.round(logistics * 100) / 100,
+          grandTotal: Math.round(grandTotal * 100) / 100,
+          receivedDate: grn.receivedDate
+        };
+      });
+
+      // 5. WIP Material Issued Cost (Store Material Requests)
+      const matchedMrs = materialRequests.filter((mr) => {
+        const mrPrj = String(mr.projectId || '').trim().toUpperCase();
+        return mrPrj === woKey || mrPrj === prjKey;
+      });
+
+      let wipIssuedCostINR = 0;
+      const wipLedger = matchedMrs.map((mr) => {
+        const mrItems = Array.isArray(mr.items) ? mr.items : [];
+        let mrCost = 0;
+        mrItems.forEach((it) => {
+          const code = String(it.itemCode || it.name || '').trim().toUpperCase();
+          const issuedQty = Number(it.issuedQty ?? it.requestedQty ?? it.qty ?? 0);
+          const rate =
+            Number(it.unitRate || it.standardRateINR || 0) ||
+            poRateMap.get(code) ||
+            rateMap.get(code) ||
+            0;
+          mrCost += issuedQty * rate;
+        });
+        wipIssuedCostINR += mrCost;
+        return {
+          id: mr.id,
+          mrNumber: mr.mrNumber,
+          department: mr.department,
+          requestedBy: mr.requestedBy,
+          status: mr.status,
+          itemsCount: mrItems.length,
+          issuedCostINR: Math.round(mrCost * 100) / 100,
+          createdAt: mr.createdAt
+        };
+      });
+
+      // 6. Effective Actual/Projected Cost & Margin Calculations
+      const actualRecognizedCostINR = Math.max(inwardGrnCostINR, committedPoCostINR, wipIssuedCostINR);
+      const baselineCostForMarginINR =
+        actualRecognizedCostINR > 0 ? actualRecognizedCostINR : estimatedBomCostINR;
+      const projectedMarginINR = Math.round((contractValueINR - baselineCostForMarginINR) * 100) / 100;
+      const projectedMarginPercent =
+        contractValueINR > 0
+          ? Math.round(((contractValueINR - baselineCostForMarginINR) / contractValueINR) * 1000) / 10
+          : 0;
+      const bomVsActualVarianceINR =
+        actualRecognizedCostINR > 0
+          ? Math.round((estimatedBomCostINR - actualRecognizedCostINR) * 100) / 100
+          : 0;
+
+      const isBomAttached = Boolean(
+        bomDoc && (attachedDrawings.length > 0 || rawBomItems.length > 0 || bomDoc.attachedAssemblyCode)
+      );
+      const isBomLocked = Boolean(bomDoc?.isFrozen || bomDoc?.approvalStatus === 'LOCKED_FREEZE');
+      const bomStatus = isBomLocked
+        ? 'LOCKED_FREEZE'
+        : bomDoc?.approvalStatus || (isBomAttached ? 'DRAFT' : 'NOT_ATTACHED');
+
+      let costHealth = 'HEALTHY';
+      if (contractValueINR > 0 && baselineCostForMarginINR > contractValueINR) {
+        costHealth = 'OVERRUN';
+      } else if (
+        (estimatedBomCostINR > 0 && actualRecognizedCostINR > estimatedBomCostINR * 1.1) ||
+        (contractValueINR > 0 && projectedMarginPercent < 12)
+      ) {
+        costHealth = 'AT_RISK';
+      }
+
+      portfolioContractValueINR += contractValueINR;
+      portfolioEstimatedBomCostINR += estimatedBomCostINR;
+      portfolioCommittedPoCostINR += committedPoCostINR;
+      portfolioInwardGrnCostINR += inwardGrnCostINR;
+      portfolioWipIssuedCostINR += wipIssuedCostINR;
+
+      return {
+        id: p.id,
+        _id: p.id,
+        workOrderNumber: p.workOrderNumber || p.projectId,
+        projectId: p.workOrderNumber || p.projectId,
+        projectName: p.projectName,
+        customerName: p.customerName,
+        customerPoNumber: p.customerPoNumber || poDoc?.poNumber || '',
+        machineModel: p.machineModel,
+        status: p.status,
+        currentStage: p.currentStage,
+        deliveryCommitmentDate: p.deliveryCommitmentDate || p.targetDispatchDate,
+        // BOM Status
+        bomAttached: isBomAttached,
+        isBomLocked,
+        bomStatus,
+        bomNumber: bomDoc?.bomNumber || null,
+        bomRevision: bomDoc?.revision || 'REV-0',
+        attachedDrawingsCount: attachedDrawings.length,
+        attachedDrawings,
+        bomItemsCount: rawBomItems.length,
+        // Financial Metrics
+        contractValueINR: Math.round(contractValueINR * 100) / 100,
+        estimatedBomCostINR: Math.round(estimatedBomCostINR * 100) / 100,
+        makeEstimatedCostINR: Math.round(makeEstimatedCostINR * 100) / 100,
+        buyEstimatedCostINR: Math.round(buyEstimatedCostINR * 100) / 100,
+        committedPoCostINR: Math.round(committedPoCostINR * 100) / 100,
+        inwardGrnCostINR: Math.round(inwardGrnCostINR * 100) / 100,
+        grnLogisticsCostINR: Math.round(grnLogisticsCostINR * 100) / 100,
+        wipIssuedCostINR: Math.round(wipIssuedCostINR * 100) / 100,
+        actualRecognizedCostINR: Math.round(actualRecognizedCostINR * 100) / 100,
+        projectedMarginINR,
+        projectedMarginPercent,
+        bomVsActualVarianceINR,
+        costHealth,
+        // Detailed Ledgers for Dossier Modal
+        itemizedBomCosting,
+        poLedger,
+        grnLedger,
+        wipLedger,
+        createdByName: p.createdByName || 'System',
+        updatedByName: p.updatedByName || 'System',
+        createdAt: p.createdAt,
+        updatedAt: p.updatedAt
+      };
+    });
+
+    const portfolioEffectiveCostINR = Math.max(
+      portfolioInwardGrnCostINR,
+      portfolioCommittedPoCostINR,
+      portfolioEstimatedBomCostINR
+    );
+    const portfolioProjectedMarginINR =
+      Math.round((portfolioContractValueINR - portfolioEffectiveCostINR) * 100) / 100;
+    const portfolioMarginPercent =
+      portfolioContractValueINR > 0
+        ? Math.round(((portfolioContractValueINR - portfolioEffectiveCostINR) / portfolioContractValueINR) * 1000) / 10
+        : 0;
+
+    res.status(200).json({
+      success: true,
+      summary: {
+        totalProjects: projectCostingRows.length,
+        bomAttachedCount: projectCostingRows.filter((r) => r.bomAttached).length,
+        portfolioContractValueINR: Math.round(portfolioContractValueINR * 100) / 100,
+        portfolioEstimatedBomCostINR: Math.round(portfolioEstimatedBomCostINR * 100) / 100,
+        portfolioCommittedPoCostINR: Math.round(portfolioCommittedPoCostINR * 100) / 100,
+        portfolioInwardGrnCostINR: Math.round(portfolioInwardGrnCostINR * 100) / 100,
+        portfolioWipIssuedCostINR: Math.round(portfolioWipIssuedCostINR * 100) / 100,
+        portfolioProjectedMarginINR,
+        portfolioMarginPercent
+      },
+      projects: projectCostingRows
+    });
+  } catch (error) {
+    next(error);
+  }
+};
+
+/**
+ * Update BOM & BOQ Item Prices Directly from Project Costing Dashboard
+ * PATCH /api/v1/project-setup/projects/:id/bom-prices
+ */
+export const updateProjectBomItemPrices = async (req, res, next) => {
+  try {
+    const { id } = req.params;
+    const { updates } = req.body;
+
+    if (!Array.isArray(updates) || updates.length === 0) {
+      return res.status(400).json({
+        success: false,
+        message: 'Please provide at least one item price update.'
+      });
+    }
+
+    const isUuid = UUID_REGEX.test(id);
+    const upperId = String(id).trim().toUpperCase();
+
+    const project = await prisma.project.findFirst({
+      where: isUuid ? { id } : { OR: [{ workOrderNumber: upperId }, { projectId: upperId }] }
+    });
+
+    const pKey1 = String(project?.projectId || upperId).trim();
+    const pKey2 = String(project?.workOrderNumber || upperId).trim();
+
+    const bomDoc = await prisma.bom.findFirst({
+      where: {
+        OR: [
+          { projectId: { equals: pKey1, mode: 'insensitive' } },
+          { projectId: { equals: pKey2, mode: 'insensitive' } },
+          { bomNumber: { equals: pKey1, mode: 'insensitive' } },
+          { bomNumber: { equals: pKey2, mode: 'insensitive' } }
+        ]
+      }
+    });
+
+    if (!bomDoc) {
+      return res.status(404).json({
+        success: false,
+        message: `No BOM record found for Work Order ${pKey2}. Please attach a BOM or drawing first.`
+      });
+    }
+
+    const actorName = getActorName(req.user);
+    const existingItems = Array.isArray(bomDoc.items) ? [...bomDoc.items] : [];
+
+    // Build lookup by index, id, and itemCode
+    const byIndex = new Map();
+    const byId = new Map();
+    const byCode = new Map();
+
+    updates.forEach((u) => {
+      const rate = Math.max(0, Number(u.standardRateINR ?? u.rate ?? u.unitPrice ?? 0) || 0);
+      if (u.index !== undefined && u.index !== null) {
+        byIndex.set(Number(u.index), rate);
+      }
+      if (u.itemId) {
+        byId.set(String(u.itemId), rate);
+      }
+      if (u.itemCode) {
+        byCode.set(String(u.itemCode).trim().toUpperCase(), rate);
+      }
+    });
+
+    let updatedCount = 0;
+    const updatedItems = existingItems.map((it, idx) => {
+      const code = String(it.itemCode || it.drawingNumber || it.name || '').trim().toUpperCase();
+      const itemId = String(it.id || `${code}_${idx}`);
+
+      let newRate = null;
+      if (byIndex.has(idx)) {
+        newRate = byIndex.get(idx);
+      } else if (byId.has(itemId)) {
+        newRate = byId.get(itemId);
+      } else if (code && byCode.has(code)) {
+        newRate = byCode.get(code);
+      }
+
+      if (newRate !== null && newRate !== undefined) {
+        updatedCount++;
+        const qty = Number(it.quantityPerMachine ?? it.baseQty ?? it.qty ?? 1) || 1;
+        return {
+          ...it,
+          standardRateINR: newRate,
+          totalCostINR: Math.round(qty * newRate * 100) / 100
+        };
+      }
+      return it;
+    });
+
+    const attachedDrawings = resolveAttachedDrawings(bomDoc, updatedItems);
+    const updatedSummary = computeBomSummaryHelper(updatedItems, attachedDrawings, bomDoc.summary);
+
+    const updatedBom = await prisma.bom.update({
+      where: { id: bomDoc.id },
+      data: {
+        items: updatedItems,
+        summary: updatedSummary,
+        updatedById: req.user?.id || null,
+        updatedByName: actorName
+      }
+    });
+
+    await logAuditEvent({
+      req,
+      action: 'PROJECT_BOM_PRICES_UPDATED',
+      module: 'project-setup',
+      entityId: updatedBom.id,
+      entityType: 'Bom',
+      notes: `Updated ${updatedCount} BOM item price(s) for Work Order ${pKey2}. Est. BOM Cost: INR ${updatedSummary.estimatedTotalCostINR}`
+    });
+
+    res.status(200).json({
+      success: true,
+      message: `All set! ${updatedCount} BOM item price(s) saved for ${pKey2}.`,
+      bom: updatedBom
     });
   } catch (error) {
     next(error);

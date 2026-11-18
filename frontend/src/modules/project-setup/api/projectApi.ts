@@ -7,7 +7,22 @@ export const projectApi = apiSlice.injectEndpoints({
         url: '/project-setup/projects',
         params
       }),
-      providesTags: ['Project']
+      providesTags: ['Project', 'Bom']
+    }),
+    getProjectCostingDashboard: builder.query<{ success: boolean; summary: any; projects: any[] }, void>({
+      query: () => '/project-setup/projects/costing',
+      providesTags: ['Project', 'Bom', 'PurchaseOrder', 'Inventory', 'MaterialRequest', 'CustomerPo']
+    }),
+    updateProjectBomPrices: builder.mutation<
+      { success: boolean; message: string; bom: any },
+      { id: string; updates: Array<{ index?: number; itemId?: string; itemCode?: string; standardRateINR: number }> }
+    >({
+      query: ({ id, updates }) => ({
+        url: `/project-setup/projects/${id}/bom-prices`,
+        method: 'PATCH',
+        body: { updates }
+      }),
+      invalidatesTags: ['Project', 'Bom']
     }),
     getAvailableCustomerPos: builder.query<{ success: boolean; count: number; customerPos: any[] }, void>({
       query: () => '/project-setup/projects/available-customer-pos',
@@ -193,6 +208,8 @@ export const projectApi = apiSlice.injectEndpoints({
 
 export const {
   useGetProjectsQuery,
+  useGetProjectCostingDashboardQuery,
+  useUpdateProjectBomPricesMutation,
   useGetAvailableCustomerPosQuery,
   useGetDepartmentUsersQuery,
   useGetProjectByIdQuery,

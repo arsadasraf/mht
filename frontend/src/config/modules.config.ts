@@ -40,6 +40,7 @@ export const CORE_MODULES: CoreModule[] = [
     description: '',
     tabs: [
       { id: 'projects', label: 'Projects', path: '/project-setup/projects', icon: 'FolderGit2' },
+      { id: 'costing', label: 'Costing Dashboard', path: '/project-setup/costing', icon: 'IndianRupee' },
       { id: 'kanban', label: 'Kanban', path: '/project-setup/kanban', icon: 'Kanban' },
       { id: 'milestones', label: 'Milestones', path: '/project-setup/milestones', icon: 'CalendarCheck' },
       { id: 'masters', label: 'Masters', path: '/project-setup/masters', icon: 'Settings' }

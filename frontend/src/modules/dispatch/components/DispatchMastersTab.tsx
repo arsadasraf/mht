@@ -441,63 +441,78 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
       : Boolean(subStageSearch.trim() || Object.keys(subStageFilters).length > 0);
 
   return (
-    <div className="space-y-6 pb-20">
-      {/* Top Header & Sub-Tab Pill Bar */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-5 rounded-2xl border border-slate-200 shadow-xs">
-        <div className="flex items-center gap-3">
-          <div className="w-10 h-10 rounded-xl bg-orange-50 border border-orange-200 text-orange-600 flex items-center justify-center shrink-0">
-            <Truck className="w-5 h-5" />
-          </div>
-          <div>
-            <h1 className="text-lg font-extrabold text-slate-900 tracking-tight">Trials & Dispatch Masters</h1>
-          </div>
-        </div>
-
-        {/* Modern Button-Type Tabs */}
-        <div className="flex items-center gap-2 p-1 bg-slate-100 rounded-2xl border border-slate-200/80">
+    <div className="space-y-4">
+      {/* Top Masters Navigation Ribbon: Pure Button-Type Tabs */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-3 rounded-2xl border border-slate-200 shadow-xs">
+        <div className="flex items-center gap-1.5 p-1 bg-slate-100 rounded-xl overflow-x-auto">
           <Link
             href="/dispatch/masters/team"
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-150 ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
               currentSubTab === 'team'
-                ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                ? 'bg-orange-500 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
           >
-            <Users className="w-3.5 h-3.5" />
-            <span>Team ({teamMembers.length})</span>
+            <Users size={14} />
+            <span>Team Members ({teamMembers.length})</span>
           </Link>
+
           <Link
             href="/dispatch/masters/sub-stages"
-            className={`flex items-center gap-2 px-4 py-2 rounded-xl text-xs font-bold transition-all duration-150 ${
+            className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition-all ${
               currentSubTab === 'sub-stages'
-                ? 'bg-orange-500 text-white shadow-xs shadow-orange-500/20'
-                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/70'
+                ? 'bg-orange-500 text-white shadow-xs'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
             }`}
           >
-            <Workflow className="w-3.5 h-3.5" />
-            <span>Sub-Stages ({subStages.length})</span>
+            <Workflow size={14} />
+            <span>Inspection Sub-Stages ({subStages.length})</span>
           </Link>
+        </div>
+
+        {/* Primary Action Button */}
+        <div>
+          {currentSubTab === 'team' ? (
+            <button
+              type="button"
+              onClick={handleOpenAddTeamModal}
+              className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Add Team Member</span>
+            </button>
+          ) : (
+            <button
+              type="button"
+              onClick={handleOpenAddSubStageModal}
+              className="flex items-center gap-1.5 px-4 py-2 bg-orange-500 hover:bg-orange-600 text-white rounded-xl text-xs font-bold transition-all shadow-xs cursor-pointer"
+            >
+              <Plus size={14} />
+              <span>Add Sub-Stage</span>
+            </button>
+          )}
         </div>
       </div>
 
       {/* SUB-TAB 1: TEAM MEMBERS */}
       {currentSubTab === 'team' && (
         <div className="space-y-4">
-          {/* Dedicated Table Toolbar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="relative flex-1 max-w-md">
+          {/* Top In-Line Search & Metrics Bar */}
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-96">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search inspector, code, designation or skill..."
+                placeholder="Search inspector by name, code, designation, skills..."
                 value={teamSearch}
                 onChange={(e) => setTeamSearch(e.target.value)}
-                className="w-full pl-9 pr-9 py-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-orange-500 focus:outline-none transition-all"
               />
               {teamSearch && (
                 <button
+                  type="button"
                   onClick={() => setTeamSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -507,20 +522,17 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
             <div className="flex items-center gap-2">
               {hasActiveFilters && (
                 <button
+                  type="button"
                   onClick={handleResetFilters}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset Filters</span>
+                  <span>Reset</span>
                 </button>
               )}
-              <button
-                onClick={handleOpenAddTeamModal}
-                className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl shadow-xs transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Team Member</span>
-              </button>
+              <span className="text-xs font-bold text-slate-600 px-3 py-1 bg-slate-50 border border-slate-200 rounded-xl">
+                {filteredTeam.length} Active Members
+              </span>
             </div>
           </div>
 
@@ -760,21 +772,22 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
       {/* SUB-TAB 2: SUB-STAGES */}
       {currentSubTab === 'sub-stages' && (
         <div className="space-y-4">
-          {/* Dedicated Table Toolbar */}
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
-            <div className="relative flex-1 max-w-md">
+          {/* Top In-Line Search & Metrics Bar */}
+          <div className="bg-white p-3 rounded-2xl border border-slate-200 shadow-xs flex flex-col sm:flex-row items-center justify-between gap-3">
+            <div className="relative w-full sm:w-96">
               <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
               <input
                 type="text"
-                placeholder="Search inspection sub-stage name, code or description..."
+                placeholder="Search inspection sub-stage by name, code, description..."
                 value={subStageSearch}
                 onChange={(e) => setSubStageSearch(e.target.value)}
-                className="w-full pl-9 pr-9 py-2 text-xs font-medium bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                className="w-full pl-9 pr-8 py-2 bg-slate-50 border border-slate-200 rounded-xl text-xs font-semibold text-slate-900 placeholder:text-slate-400 focus:bg-white focus:border-orange-500 focus:outline-none transition-all"
               />
               {subStageSearch && (
                 <button
+                  type="button"
                   onClick={() => setSubStageSearch('')}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600"
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-600 p-0.5 rounded cursor-pointer"
                 >
                   <X className="w-3.5 h-3.5" />
                 </button>
@@ -784,20 +797,17 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
             <div className="flex items-center gap-2">
               {hasActiveFilters && (
                 <button
+                  type="button"
                   onClick={handleResetFilters}
-                  className="flex items-center gap-1.5 px-3 py-2 text-xs font-bold text-slate-600 bg-slate-100 hover:bg-slate-200 rounded-xl transition-colors"
+                  className="flex items-center gap-1.5 px-3 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl text-xs font-bold transition-colors cursor-pointer"
                 >
                   <RotateCcw className="w-3.5 h-3.5" />
-                  <span>Reset Filters</span>
+                  <span>Reset</span>
                 </button>
               )}
-              <button
-                onClick={handleOpenAddSubStageModal}
-                className="flex items-center gap-2 px-4 py-2 text-xs font-bold text-white bg-orange-500 hover:bg-orange-600 rounded-xl shadow-xs transition-colors"
-              >
-                <Plus className="w-4 h-4" />
-                <span>Add Sub-Stage</span>
-              </button>
+              <span className="text-xs font-bold text-slate-600 px-3 py-1 bg-slate-50 border border-slate-200 rounded-xl">
+                {filteredSubStages.length} Configured Sub-Stages
+              </span>
             </div>
           </div>
 
@@ -1046,7 +1056,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     readOnly={Boolean(editingTeamMember)}
                     value={teamForm.memberCode}
                     onChange={(e) => setTeamForm((p) => ({ ...p, memberCode: e.target.value.toUpperCase() }))}
-                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1060,7 +1070,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     placeholder="e.g. Ramesh Kumar"
                     value={teamForm.fullName}
                     onChange={(e) => setTeamForm((p) => ({ ...p, fullName: e.target.value }))}
-                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1074,7 +1084,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     placeholder="e.g. Senior Inspection Engineer"
                     value={teamForm.designation}
                     onChange={(e) => setTeamForm((p) => ({ ...p, designation: e.target.value }))}
-                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1085,7 +1095,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                   <select
                     value={teamForm.department}
                     onChange={(e) => setTeamForm((p) => ({ ...p, department: e.target.value }))}
-                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   >
                     {DEPARTMENTS.map((dept) => (
                       <option key={dept.value} value={dept.value}>
@@ -1102,7 +1112,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                   <select
                     value={teamForm.skillSpecialty}
                     onChange={(e) => setTeamForm((p) => ({ ...p, skillSpecialty: e.target.value }))}
-                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   >
                     {SKILL_SPECIALTIES.map((spec) => (
                       <option key={spec} value={spec}>
@@ -1121,7 +1131,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     placeholder="+91 98765 43210"
                     value={teamForm.phone}
                     onChange={(e) => setTeamForm((p) => ({ ...p, phone: e.target.value }))}
-                    className="w-full px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1134,7 +1144,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     placeholder="ramesh@machinehouse.in"
                     value={teamForm.email}
                     onChange={(e) => setTeamForm((p) => ({ ...p, email: e.target.value }))}
-                    className="w-full px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1147,7 +1157,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     placeholder="Key qualifications, certifications, shift availability..."
                     value={teamForm.notes}
                     onChange={(e) => setTeamForm((p) => ({ ...p, notes: e.target.value }))}
-                    className="w-full px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1233,7 +1243,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     readOnly={Boolean(editingSubStage)}
                     value={subStageForm.subStageCode}
                     onChange={(e) => setSubStageForm((p) => ({ ...p, subStageCode: e.target.value.toUpperCase() }))}
-                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-hidden focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-mono font-bold bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1247,7 +1257,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     required
                     value={subStageForm.defaultOrder}
                     onChange={(e) => setSubStageForm((p) => ({ ...p, defaultOrder: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1261,7 +1271,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     placeholder="e.g. Electrical Safety & Insulation Resistance Test"
                     value={subStageForm.name}
                     onChange={(e) => setSubStageForm((p) => ({ ...p, name: e.target.value }))}
-                    className="w-full px-3 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-bold bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1286,7 +1296,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     min={1}
                     value={subStageForm.standardDays}
                     onChange={(e) => setSubStageForm((p) => ({ ...p, standardDays: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1300,7 +1310,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     max={100}
                     value={subStageForm.weightPercent}
                     onChange={(e) => setSubStageForm((p) => ({ ...p, weightPercent: Number(e.target.value) }))}
-                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-semibold bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 
@@ -1313,7 +1323,7 @@ export default function DispatchMastersTab({ initialSubTab }: DispatchMastersTab
                     placeholder="Inspection checklist items, sensor calibration standards, signoff gates..."
                     value={subStageForm.description}
                     onChange={(e) => setSubStageForm((p) => ({ ...p, description: e.target.value }))}
-                    className="w-full px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl focus:outline-hidden focus:ring-2 focus:ring-orange-500/20 focus:border-orange-500"
+                    className="w-full px-3 py-2 text-xs font-medium bg-white border border-slate-200 rounded-xl focus:outline-none focus:border-orange-500"
                   />
                 </div>
 

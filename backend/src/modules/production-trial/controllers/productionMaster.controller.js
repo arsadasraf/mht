@@ -208,12 +208,22 @@ export const deleteProductionTeamMember = async (req, res, next) => {
 // PRODUCTION SUB-STAGES (DepartmentSubStageMaster)
 // ----------------------------------------------------
 
+const normalizeProductionLine = (val) => {
+  const clean = String(val || '').toUpperCase().trim();
+  if (clean === 'ELECTRICAL' || clean.includes('ELEC')) return 'ELECTRICAL';
+  if (clean === 'AUTOMATION' || clean.includes('AUTO') || clean.includes('PLC')) return 'AUTOMATION';
+  return 'MECHANICAL';
+};
+
 export const getProductionSubStages = async (req, res, next) => {
   try {
-    const { includeInactive } = req.query;
+    const { includeInactive, productionLine } = req.query;
     const where = { departmentModule: 'production' };
     if (includeInactive !== 'true') {
       where.isActive = true;
+    }
+    if (productionLine && String(productionLine).toUpperCase() !== 'ALL') {
+      where.parentStageCode = normalizeProductionLine(productionLine);
     }
 
     const list = await prisma.departmentSubStageMaster.findMany({
@@ -224,7 +234,12 @@ export const getProductionSubStages = async (req, res, next) => {
     res.status(200).json({
       success: true,
       count: list.length,
-      subStages: list.map((s) => ({ ...s, _id: s.id, name: s.subStageName }))
+      subStages: list.map((s) => ({
+        ...s,
+        _id: s.id,
+        name: s.subStageName,
+        productionLine: normalizeProductionLine(s.parentStageCode)
+      }))
     });
   } catch (error) {
     next(error);
@@ -237,7 +252,8 @@ export const createProductionSubStage = async (req, res, next) => {
     const {
       name,
       subStageName,
-      parentStageCode = 'PRODUCTION_ASSEMBLY',
+      productionLine,
+      parentStageCode = 'MECHANICAL',
       defaultOrder = 1,
       standardDays = 5,
       weightPercent = 10,
@@ -251,6 +267,8 @@ export const createProductionSubStage = async (req, res, next) => {
         message: 'Sub-stage name is required.'
       });
     }
+
+    const resolvedLine = normalizeProductionLine(productionLine || parentStageCode);
 
     // Auto-generate sequence code PRD-SS-101
     let subStageCode = req.body.subStageCode ? String(req.body.subStageCode).trim().toUpperCase() : '';
@@ -277,7 +295,7 @@ export const createProductionSubStage = async (req, res, next) => {
         subStageCode,
         subStageName: finalName,
         departmentModule: 'production',
-        parentStageCode: String(parentStageCode).trim().toUpperCase(),
+        parentStageCode: resolvedLine,
         defaultOrder: Number(defaultOrder) || 1,
         standardDays: Number(standardDays) || 5,
         weightPercent: Number(weightPercent) || 10,
@@ -296,13 +314,18 @@ export const createProductionSubStage = async (req, res, next) => {
       action: 'CREATE_PRODUCTION_SUBSTAGE',
       module: 'production-trial',
       targetId: subStage.id,
-      details: { subStageCode, subStageName: finalName }
+      details: { subStageCode, subStageName: finalName, productionLine: resolvedLine }
     });
 
     res.status(201).json({
       success: true,
-      message: `All set! Production Sub-Stage ${subStage.subStageName} (${subStageCode}) created.`,
-      subStage: { ...subStage, _id: subStage.id, name: subStage.subStageName }
+      message: `All set! ${resolvedLine} Sub-Stage ${subStage.subStageName} (${subStageCode}) created.`,
+      subStage: {
+        ...subStage,
+        _id: subStage.id,
+        name: subStage.subStageName,
+        productionLine: resolvedLine
+      }
     });
   } catch (error) {
     next(error);
@@ -322,6 +345,7 @@ export const updateProductionSubStage = async (req, res, next) => {
     const {
       name,
       subStageName,
+      productionLine,
       parentStageCode,
       defaultOrder,
       standardDays,
@@ -331,10 +355,14 @@ export const updateProductionSubStage = async (req, res, next) => {
     } = req.body;
 
     const finalName = subStageName !== undefined ? subStageName : name;
+    const nextLine =
+      productionLine !== undefined || parentStageCode !== undefined
+        ? normalizeProductionLine(productionLine || parentStageCode)
+        : undefined;
 
     const data = {
       ...(finalName !== undefined ? { subStageName: String(finalName).trim() } : {}),
-      ...(parentStageCode !== undefined ? { parentStageCode: String(parentStageCode).trim().toUpperCase() } : {}),
+      ...(nextLine !== undefined ? { parentStageCode: nextLine } : {}),
       ...(defaultOrder !== undefined ? { defaultOrder: Number(defaultOrder) } : {}),
       ...(standardDays !== undefined ? { standardDays: Number(standardDays) } : {}),
       ...(weightPercent !== undefined ? { weightPercent: Number(weightPercent) } : {}),
@@ -352,7 +380,12 @@ export const updateProductionSubStage = async (req, res, next) => {
     res.status(200).json({
       success: true,
       message: `All set! Sub-Stage ${updated.subStageName} updated.`,
-      subStage: { ...updated, _id: updated.id, name: updated.subStageName }
+      subStage: {
+        ...updated,
+        _id: updated.id,
+        name: updated.subStageName,
+        productionLine: normalizeProductionLine(updated.parentStageCode)
+      }
     });
   } catch (error) {
     next(error);
